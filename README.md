@@ -189,6 +189,7 @@ All API routes are CORS-enabled. Routes marked with a lock require a Bearer toke
 | `PUT`    | `/api/upload`             | Bearer | Streaming upload (raw bytes, metadata via headers)                 |
 | `POST`   | `/api/register`           | Bearer | Register metadata for a file already uploaded to R2                |
 | `POST`   | `/api/assets/:id`         | Bearer | Attach sidecars to an upload: poster, transcript, storyboard, title |
+| `DELETE` | `/api/upload/:id`         | Bearer | Delete an upload permanently: R2 files, comments, likes, view events |
 | `GET`    | `/api/media/:id`          | Public | Serve raw file from R2 (Range requests supported)                  |
 | `GET`    | `/api/image/:id`          | Public | Serve a screenshot from R2                                         |
 | `GET`    | `/api/poster/:id`         | Public | Poster frame for a recording                                       |

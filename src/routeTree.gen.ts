@@ -17,6 +17,7 @@ import { Route as ApiSetupRouteImport } from './routes/api/setup'
 import { Route as ApiRegisterRouteImport } from './routes/api/register'
 import { Route as ApiPingRouteImport } from './routes/api/ping'
 import { Route as ApiViewIdRouteImport } from './routes/api/view.$id'
+import { Route as ApiUploadIdRouteImport } from './routes/api/upload.$id'
 import { Route as ApiStoryboardIdRouteImport } from './routes/api/storyboard.$id'
 import { Route as ApiStoryboardVttIdRouteImport } from './routes/api/storyboard-vtt.$id'
 import { Route as ApiPosterIdRouteImport } from './routes/api/poster.$id'
@@ -70,6 +71,11 @@ const ApiViewIdRoute = ApiViewIdRouteImport.update({
   id: '/api/view/$id',
   path: '/api/view/$id',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadIdRoute = ApiUploadIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiUploadRoute,
 } as any)
 const ApiStoryboardIdRoute = ApiStoryboardIdRouteImport.update({
   id: '/api/storyboard/$id',
@@ -143,7 +149,7 @@ export interface FileRoutesByFullPath {
   '/api/ping': typeof ApiPingRoute
   '/api/register': typeof ApiRegisterRoute
   '/api/setup': typeof ApiSetupRoute
-  '/api/upload': typeof ApiUploadRoute
+  '/api/upload': typeof ApiUploadRouteWithChildren
   '/api/version': typeof ApiVersionRoute
   '/api/assets/$id': typeof ApiAssetsIdRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/api/poster/$id': typeof ApiPosterIdRoute
   '/api/storyboard-vtt/$id': typeof ApiStoryboardVttIdRoute
   '/api/storyboard/$id': typeof ApiStoryboardIdRoute
+  '/api/upload/$id': typeof ApiUploadIdRoute
   '/api/view/$id': typeof ApiViewIdRoute
   '/api/auth/callback/$provider': typeof ApiAuthCallbackProviderRoute
 }
@@ -166,7 +173,7 @@ export interface FileRoutesByTo {
   '/api/ping': typeof ApiPingRoute
   '/api/register': typeof ApiRegisterRoute
   '/api/setup': typeof ApiSetupRoute
-  '/api/upload': typeof ApiUploadRoute
+  '/api/upload': typeof ApiUploadRouteWithChildren
   '/api/version': typeof ApiVersionRoute
   '/api/assets/$id': typeof ApiAssetsIdRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/api/poster/$id': typeof ApiPosterIdRoute
   '/api/storyboard-vtt/$id': typeof ApiStoryboardVttIdRoute
   '/api/storyboard/$id': typeof ApiStoryboardIdRoute
+  '/api/upload/$id': typeof ApiUploadIdRoute
   '/api/view/$id': typeof ApiViewIdRoute
   '/api/auth/callback/$provider': typeof ApiAuthCallbackProviderRoute
 }
@@ -190,7 +198,7 @@ export interface FileRoutesById {
   '/api/ping': typeof ApiPingRoute
   '/api/register': typeof ApiRegisterRoute
   '/api/setup': typeof ApiSetupRoute
-  '/api/upload': typeof ApiUploadRoute
+  '/api/upload': typeof ApiUploadRouteWithChildren
   '/api/version': typeof ApiVersionRoute
   '/api/assets/$id': typeof ApiAssetsIdRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
@@ -204,6 +212,7 @@ export interface FileRoutesById {
   '/api/poster/$id': typeof ApiPosterIdRoute
   '/api/storyboard-vtt/$id': typeof ApiStoryboardVttIdRoute
   '/api/storyboard/$id': typeof ApiStoryboardIdRoute
+  '/api/upload/$id': typeof ApiUploadIdRoute
   '/api/view/$id': typeof ApiViewIdRoute
   '/api/auth/callback/$provider': typeof ApiAuthCallbackProviderRoute
 }
@@ -229,6 +238,7 @@ export interface FileRouteTypes {
     | '/api/poster/$id'
     | '/api/storyboard-vtt/$id'
     | '/api/storyboard/$id'
+    | '/api/upload/$id'
     | '/api/view/$id'
     | '/api/auth/callback/$provider'
   fileRoutesByTo: FileRoutesByTo
@@ -252,6 +262,7 @@ export interface FileRouteTypes {
     | '/api/poster/$id'
     | '/api/storyboard-vtt/$id'
     | '/api/storyboard/$id'
+    | '/api/upload/$id'
     | '/api/view/$id'
     | '/api/auth/callback/$provider'
   id:
@@ -275,6 +286,7 @@ export interface FileRouteTypes {
     | '/api/poster/$id'
     | '/api/storyboard-vtt/$id'
     | '/api/storyboard/$id'
+    | '/api/upload/$id'
     | '/api/view/$id'
     | '/api/auth/callback/$provider'
   fileRoutesById: FileRoutesById
@@ -285,7 +297,7 @@ export interface RootRouteChildren {
   ApiPingRoute: typeof ApiPingRoute
   ApiRegisterRoute: typeof ApiRegisterRoute
   ApiSetupRoute: typeof ApiSetupRoute
-  ApiUploadRoute: typeof ApiUploadRoute
+  ApiUploadRoute: typeof ApiUploadRouteWithChildren
   ApiVersionRoute: typeof ApiVersionRoute
   ApiAssetsIdRoute: typeof ApiAssetsIdRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
@@ -360,6 +372,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/view/$id'
       preLoaderRoute: typeof ApiViewIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/upload/$id': {
+      id: '/api/upload/$id'
+      path: '/$id'
+      fullPath: '/api/upload/$id'
+      preLoaderRoute: typeof ApiUploadIdRouteImport
+      parentRoute: typeof ApiUploadRoute
     }
     '/api/storyboard/$id': {
       id: '/api/storyboard/$id'
@@ -455,13 +474,25 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface ApiUploadRouteChildren {
+  ApiUploadIdRoute: typeof ApiUploadIdRoute
+}
+
+const ApiUploadRouteChildren: ApiUploadRouteChildren = {
+  ApiUploadIdRoute: ApiUploadIdRoute,
+}
+
+const ApiUploadRouteWithChildren = ApiUploadRoute._addFileChildren(
+  ApiUploadRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   IdRoute: IdRoute,
   ApiPingRoute: ApiPingRoute,
   ApiRegisterRoute: ApiRegisterRoute,
   ApiSetupRoute: ApiSetupRoute,
-  ApiUploadRoute: ApiUploadRoute,
+  ApiUploadRoute: ApiUploadRouteWithChildren,
   ApiVersionRoute: ApiVersionRoute,
   ApiAssetsIdRoute: ApiAssetsIdRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
