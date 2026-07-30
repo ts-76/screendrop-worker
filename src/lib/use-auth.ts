@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 export type AuthProvider = "github" | "google";
 
@@ -16,32 +16,18 @@ export interface AuthState {
 
 /**
  * Deployment auth state for the share page: whether OAuth sign-in is
- * configured and who is signed in. `auth` is null until /api/auth/me
- * answers, so sign-in-gated UI can stay hidden instead of flashing.
+ * configured and who is signed in. Resolved server-side (see
+ * `getAuthState` in auth.server.ts) and passed in as `initialAuth`, so
+ * there's no client fetch and no loading flash — the first paint is
+ * already correct.
  */
-export function useAuth() {
-  const [auth, setAuth] = useState<AuthState | null>(null);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const res = await fetch("/api/auth/me");
-        if (res.ok) {
-          const data: AuthState = JSON.parse(await res.text());
-          setAuth(data);
-          return;
-        }
-      } catch {
-        // fall through to anonymous mode
-      }
-      setAuth({ authEnabled: false, providers: [], user: null });
-    })();
-  }, []);
+export function useAuth(initialAuth: AuthState) {
+  const [auth, setAuth] = useState<AuthState>(initialAuth);
 
   const signOut = useCallback(async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      setAuth((prev) => (prev ? { ...prev, user: null } : prev));
+      setAuth((prev) => ({ ...prev, user: null }));
     } catch {
       // silently fail
     }

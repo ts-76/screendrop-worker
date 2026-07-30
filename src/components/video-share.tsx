@@ -1,19 +1,15 @@
-import { DropdownMenu, Tabs, useKumoToastManager } from "@cloudflare/kumo";
+import { Tabs, useKumoToastManager } from "@cloudflare/kumo";
 import { Button, LinkButton } from "@cloudflare/kumo/components/button";
-import {
-  ArrowsInLineHorizontalIcon,
-  ArrowsOutLineHorizontalIcon,
-  DownloadSimpleIcon,
-  ShareNetworkIcon,
-} from "@phosphor-icons/react";
+import { DownloadSimpleIcon, ShareNetworkIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Upload } from "@/db/schema";
 import type { Author } from "@/lib/uploads.server";
 import type { Transcript } from "@/lib/transcript";
 import type { Chapter } from "@/components/video-player";
-import type { AuthState, AuthUser } from "@/lib/use-auth";
+import type { AuthState } from "@/lib/use-auth";
 import { CommentsPanel } from "@/components/comments-panel";
 import { LikeButton } from "@/components/like-button";
+import { ShareHeader } from "@/components/share-header";
 import { TranscriptPanel } from "@/components/transcript-panel";
 import { VideoPlayer, getChapterAtTime } from "@/components/video-player";
 import {
@@ -32,19 +28,19 @@ interface VideoShareProps {
   origin: string;
   transcript: Transcript | null;
   likeCount: number;
+  auth: AuthState;
 }
 
 /** The share page, layout ported from Bloom: sticky header, video with
- *  sidebar (transcript/comments), info row below, and a theater mode
- *  that stretches the video across the full width. */
+ *  sidebar (transcript/comments), and an info row below. */
 export function VideoShare({
   upload,
   author,
   origin,
   transcript,
   likeCount,
+  auth: initialAuth,
 }: VideoShareProps) {
-  const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [activeTab, setActiveTab] = useState(
     transcript ? "transcript" : "comments",
@@ -52,9 +48,7 @@ export function VideoShare({
   const [views, setViews] = useState(upload.views);
   const activeVideoRef = useRef<HTMLVideoElement | null>(null);
   const toastManager = useKumoToastManager();
-  const { auth, signOut } = useAuth();
-
-  const toggleTheater = () => setIsTheaterMode((v) => !v);
+  const { auth, signOut } = useAuth(initialAuth);
 
   const mediaSource = `${origin}/api/media/${upload.id}`;
   const posterSource = upload.posterKey
@@ -67,6 +61,10 @@ export function VideoShare({
     ? `${origin}/api/storyboard-vtt/${upload.id}`
     : undefined;
   const hasTranscript = transcript !== null;
+  // Comments/likes need both the upload's own switch and a deployment
+  // that actually has sign-in configured.
+  const showComments = upload.socialEnabled && auth.authEnabled;
+  const hasSidebar = hasTranscript || showComments;
 
   // Sprite sheet + grid for the transcript's hover frame previews.
   const storyboard = useMemo(() => {
@@ -136,6 +134,8 @@ export function VideoShare({
     );
   }, [upload.id]);
 
+  // Tabs only make sense once there's something to switch between.
+  const showSidebarTabs = hasTranscript && showComments;
   const sidebarTabs = (
     <div className="shrink-0 px-2 pb-2">
       <Tabs
@@ -159,7 +159,7 @@ export function VideoShare({
         storyboard={storyboard}
         className="h-full"
       />
-    ) : (
+    ) : showComments ? (
       <CommentsPanel
         uploadId={upload.id}
         currentTime={currentTime}
@@ -167,7 +167,7 @@ export function VideoShare({
         auth={auth}
         className="h-full"
       />
-    );
+    ) : null;
 
   const videoInfo = (
     <VideoInfo
@@ -176,9 +176,8 @@ export function VideoShare({
       views={views}
       likeCount={likeCount}
       auth={auth}
+      showLike={showComments}
       mediaSource={mediaSource}
-      isTheaterMode={isTheaterMode}
-      onToggleTheater={toggleTheater}
       onNotify={(message, variant) =>
         toastManager.add({ title: message, variant })
       }
@@ -187,36 +186,21 @@ export function VideoShare({
 
   return (
     <div className="flex min-h-screen flex-col bg-neutral-50">
-      <Header user={auth?.user ?? null} onSignOut={() => void signOut()} />
+      <ShareHeader user={auth.user} onSignOut={() => void signOut()} />
 
-      {/* Full-width video in theater mode — hidden on mobile */}
-      {isTheaterMode && (
+      {/* Content: YouTube-like layout. Without a sidebar, cap the width
+          instead of letting the video stretch edge-to-edge. */}
+      <div className="flex-1 overflow-auto px-0 py-0 lg:px-6 lg:py-6">
         <div
-          className="hidden w-full bg-black lg:block"
-          style={{ height: "calc(100vh - 56px - 280px)" }}
+          className={`flex flex-col ${hasSidebar ? "" : "mx-auto w-full max-w-5xl"}`}
         >
-          <VideoPlayer
-            src={mediaSource}
-            poster={posterSource}
-            layout="fill"
-            initialTime={currentTime}
-            subtitlesUrl={subtitlesUrl}
-            thumbnailsUrl={thumbnailsUrl}
-            onActivate={handlePlayerActivate}
-            onTimeUpdate={handlePlayerTimeUpdate}
-            className="block h-full w-full"
-          />
-        </div>
-      )}
-
-      {/* Content */}
-      <div
-        className={`flex-1 px-0 lg:px-6 ${isTheaterMode ? "lg:py-3" : "lg:py-6"} overflow-auto py-0`}
-      >
-        {isTheaterMode ? (
-          /* Theater mode: single column stack */
-          <div className="flex flex-col">
-            <div className="w-full overflow-hidden bg-black lg:hidden">
+          {/* Row 1: Video + Sidebar */}
+          <div className="flex flex-col lg:flex-row lg:gap-6">
+            {/* Video */}
+            <div
+              className="w-full overflow-hidden rounded-none bg-black lg:flex-1 lg:rounded-2xl"
+              style={{ maxHeight: "calc(100vh - 56px - 240px)" }}
+            >
               <VideoPlayer
                 src={mediaSource}
                 poster={posterSource}
@@ -225,58 +209,12 @@ export function VideoShare({
                 thumbnailsUrl={thumbnailsUrl}
                 onActivate={handlePlayerActivate}
                 onTimeUpdate={handlePlayerTimeUpdate}
-                className="block w-full"
+                className="block h-full w-full"
               />
             </div>
-            <div className="mt-3 px-4 lg:px-0">{videoInfo}</div>
-            {currentChapter && (
-              <div className="mt-2 px-4 lg:px-0">
-                <CurrentChapterIndicator chapter={currentChapter} />
-              </div>
-            )}
-            {hasTranscript && (
-              <div className="mt-4 px-4 lg:px-0">
-                <TranscriptPanel
-                  transcript={transcript}
-                  currentTime={currentTime}
-                  onSeek={handleSeek}
-                  storyboard={storyboard}
-                  style={{ maxHeight: "400px" }}
-                />
-              </div>
-            )}
-            <div className="mt-4 px-4 lg:px-0">
-              <CommentsPanel
-                uploadId={upload.id}
-                currentTime={currentTime}
-                onSeek={handleSeek}
-                auth={auth}
-              />
-            </div>
-          </div>
-        ) : (
-          /* Default mode: YouTube-like layout */
-          <div className="flex flex-col">
-            {/* Row 1: Video + Sidebar */}
-            <div className="flex flex-col lg:flex-row lg:gap-6">
-              {/* Video */}
-              <div
-                className="w-full overflow-hidden rounded-none bg-black lg:flex-1 lg:rounded-2xl"
-                style={{ maxHeight: "calc(100vh - 56px - 240px)" }}
-              >
-                <VideoPlayer
-                  src={mediaSource}
-                  poster={posterSource}
-                  initialTime={currentTime}
-                  subtitlesUrl={subtitlesUrl}
-                  thumbnailsUrl={thumbnailsUrl}
-                  onActivate={handlePlayerActivate}
-                  onTimeUpdate={handlePlayerTimeUpdate}
-                  className="block h-full w-full"
-                />
-              </div>
 
-              {/* Sidebar */}
+            {/* Sidebar */}
+            {hasSidebar && (
               <div
                 className="hidden shrink-0 flex-col lg:flex"
                 style={{
@@ -284,29 +222,33 @@ export function VideoShare({
                   maxHeight: "calc(100vh - 56px - 240px)",
                 }}
               >
-                {hasTranscript && sidebarTabs}
+                {showSidebarTabs && sidebarTabs}
                 <div className="min-h-0 flex-1">{sidebarContent}</div>
               </div>
-            </div>
+            )}
+          </div>
 
-            {/* Row 2: Video Info + Chapters (constrained to video width) */}
-            <div className="mt-3 w-full px-4 lg:max-w-[calc(100%-400px-1.5rem)] lg:px-0">
-              {videoInfo}
+          {/* Row 2: Video Info + Chapters (constrained to video width) */}
+          <div
+            className={`mt-3 w-full px-4 lg:px-0 ${hasSidebar ? "lg:max-w-[calc(100%-400px-1.5rem)]" : ""}`}
+          >
+            {videoInfo}
 
-              {currentChapter && (
-                <CurrentChapterIndicator chapter={currentChapter} />
-              )}
-            </div>
+            {currentChapter && (
+              <CurrentChapterIndicator chapter={currentChapter} />
+            )}
+          </div>
 
-            {/* Mobile-only: Sidebar below content */}
+          {/* Mobile-only: Sidebar below content */}
+          {hasSidebar && (
             <div className="mt-4 px-4 lg:hidden">
-              {hasTranscript && sidebarTabs}
+              {showSidebarTabs && sidebarTabs}
               <div className="flex flex-col" style={{ maxHeight: "400px" }}>
                 {sidebarContent}
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -318,19 +260,17 @@ function VideoInfo({
   views,
   likeCount,
   auth,
+  showLike,
   mediaSource,
-  isTheaterMode,
-  onToggleTheater,
   onNotify,
 }: {
   upload: Upload;
   author: Author;
   views: number;
   likeCount: number;
-  auth: AuthState | null;
+  auth: AuthState;
+  showLike: boolean;
   mediaSource: string;
-  isTheaterMode: boolean;
-  onToggleTheater: () => void;
   onNotify: (message: string, variant?: "error") => void;
 }) {
   const title = upload.title?.trim() || upload.filename;
@@ -379,11 +319,13 @@ function VideoInfo({
           <span className="mr-1 flex items-center gap-1.5 text-sm font-medium text-neutral-500">
             {formatViews(views)}
           </span>
-          <LikeButton
-            uploadId={upload.id}
-            auth={auth}
-            initialCount={likeCount}
-          />
+          {showLike && (
+            <LikeButton
+              uploadId={upload.id}
+              auth={auth}
+              initialCount={likeCount}
+            />
+          )}
           <Button
             variant="secondary"
             icon={<ShareNetworkIcon weight="bold" />}
@@ -399,27 +341,6 @@ function VideoInfo({
           >
             Download
           </LinkButton>
-          <Button
-            variant="secondary"
-            shape="square"
-            className="hidden lg:inline-flex"
-            aria-label={isTheaterMode ? "Default view" : "Theater mode"}
-            title={isTheaterMode ? "Default view" : "Theater mode"}
-            icon={
-              isTheaterMode ? (
-                <ArrowsInLineHorizontalIcon
-                  weight="bold"
-                  className="text-neutral-700"
-                />
-              ) : (
-                <ArrowsOutLineHorizontalIcon
-                  weight="bold"
-                  className="text-neutral-700"
-                />
-              )
-            }
-            onClick={onToggleTheater}
-          />
         </div>
       </div>
     </div>
@@ -437,50 +358,5 @@ function CurrentChapterIndicator({ chapter }: { chapter: Chapter }) {
         {formatDuration(chapter.startTime)}
       </span>
     </div>
-  );
-}
-
-function Header({
-  user,
-  onSignOut,
-}: {
-  user: AuthUser | null;
-  onSignOut: () => void;
-}) {
-  return (
-    <header className="flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-4">
-      <a href="/" className="flex items-center gap-2">
-        <img src="/favicon.ico" alt="" className="size-6" />
-        <span className="font-semibold text-neutral-900">Screendrop</span>
-      </a>
-      {user && (
-        <DropdownMenu>
-          <DropdownMenu.Trigger
-            render={
-              <button
-                className="cursor-pointer rounded-full transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-neutral-900/20 focus-visible:outline-none"
-                aria-label={`Signed in as ${user.name}`}
-              >
-                <img
-                  src={
-                    user.avatar ||
-                    `https://api.dicebear.com/10.x/glyphs/svg?seed=${encodeURIComponent(user.name)}`
-                  }
-                  alt={user.name}
-                  className="size-7 rounded-full"
-                />
-              </button>
-            }
-          />
-          <DropdownMenu.Content>
-            <div className="px-3 py-1.5 text-xs text-neutral-500">
-              Signed in as{" "}
-              <span className="font-medium text-neutral-800">{user.name}</span>
-            </div>
-            <DropdownMenu.Item onClick={onSignOut}>Sign out</DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu>
-      )}
-    </header>
   );
 }

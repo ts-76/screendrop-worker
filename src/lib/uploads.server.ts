@@ -93,6 +93,7 @@ export async function ensureSchema(): Promise<Array<string>> {
     ["storyboard_meta", "TEXT"],
     ["chapters", "TEXT"],
     ["views", "INTEGER NOT NULL DEFAULT 0"],
+    ["social_enabled", "INTEGER NOT NULL DEFAULT 1"],
   ];
   for (const [name, definition] of v2Columns) {
     if (!columnNames.has(name)) {

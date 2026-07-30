@@ -18,10 +18,12 @@ Anyone with a recording link sees a share page with:
 
 - A video player with hover scrub previews, captions, playback speed, picture-in-picture, and theater mode
 - A live transcript panel — the active line follows playback, clicking a line seeks, search filters with highlighting
-- Comments, optionally pinned to a timestamp; commenters pick a name once (kept in localStorage, no accounts)
+- Comments, optionally pinned to a timestamp, and likes — both require signing in with GitHub or Google (see [Comment sign-in](#comment-sign-in-required-oauth) below); an upload can also turn both off entirely
 - View counts, and OG tags so links unfurl with a poster image in chat apps
 
-Screenshots keep a lightweight viewer page with download, copy link, and copy image actions. The transcript is rendered server-side, so share pages arrive readable and indexable.
+Screenshots keep a lightweight viewer page with download, copy link, and copy image actions, plus the same comments and likes as recordings. The transcript is rendered server-side, so share pages arrive readable and indexable.
+
+Each upload picks its own title and whether comments/likes are enabled at upload time (the Screendrop app prompts for this before sharing); both default to on if the client doesn't specify.
 
 ## Deploy
 
@@ -193,10 +195,13 @@ All API routes are CORS-enabled. Routes marked with a lock require a Bearer toke
 | `GET`    | `/api/captions/:id`       | Public | Captions as WebVTT, generated from the stored transcript           |
 | `GET`    | `/api/storyboard/:id`     | Public | Scrub-preview sprite sheet                                         |
 | `GET`    | `/api/storyboard-vtt/:id` | Public | Thumbnails WebVTT pointing at sprite tiles                         |
-| `GET`    | `/api/comments/:id`       | Public | List comments for an upload                                        |
-| `POST`   | `/api/comments/:id`       | Public | Post a comment (session cookie when OAuth is configured, anonymous viewer identity otherwise) |
-| `PATCH`  | `/api/comments/:id`       | Public | Edit a comment (author only)                                       |
-| `DELETE` | `/api/comments/:id`       | Public | Delete a comment (author only)                                     |
+| `GET`    | `/api/comments/:id`       | Public | List comments for an upload (403 if the upload has comments off)   |
+| `POST`   | `/api/comments/:id`       | Public | Post a comment — requires a signed-in session (401 otherwise)      |
+| `PATCH`  | `/api/comments/:id`       | Public | Edit a comment (author only, signed in)                            |
+| `DELETE` | `/api/comments/:id`       | Public | Delete a comment (author only, signed in)                          |
+| `GET`    | `/api/likes/:id`          | Public | Like count, and whether the signed-in viewer already liked          |
+| `POST`   | `/api/likes/:id`          | Public | Like an upload — requires a signed-in session (401 otherwise)      |
+| `DELETE` | `/api/likes/:id`          | Public | Unlike an upload (signed in)                                       |
 | `GET`    | `/api/auth/me`            | Public | Session probe: configured providers + signed-in user               |
 | `GET`    | `/api/auth/login`         | Public | Start OAuth sign-in (`?provider=github\|google&redirect=/:id`)     |
 | `GET`    | `/api/auth/callback/:provider` | Public | OAuth callback (register this URL on your OAuth app)          |
@@ -211,8 +216,12 @@ curl -X POST https://your-worker.workers.dev/api/upload \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -F "file=@screenshot.png" \
   -F "width=1920" \
-  -F "height=1080"
+  -F "height=1080" \
+  -F "title=Onboarding walkthrough" \
+  -F "social_enabled=false"
 ```
+
+`title` and `social_enabled` are both optional. `social_enabled` defaults to `true`; pass `false` (or `0`) to turn off comments and likes for this upload.
 
 ### Upload (streaming)
 
@@ -225,8 +234,12 @@ curl -X PUT https://your-worker.workers.dev/api/upload \
   -H "X-Filename: screenshot.png" \
   -H "X-Width: 1920" \
   -H "X-Height: 1080" \
+  -H "X-Title: Onboarding walkthrough" \
+  -H "X-Social-Enabled: false" \
   --data-binary @screenshot.png
 ```
+
+`X-Title` and `X-Social-Enabled` are both optional, with the same defaults as the multipart form above.
 
 ### Response
 
@@ -271,9 +284,9 @@ Set via `wrangler secret put`, or prompted automatically during the Deploy to Cl
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth client credentials — enables "Sign in with Google" for comments | No |
 | `AUTH_SECRET`   | Overrides the session-cookie signing key (defaults to `UPLOAD_TOKEN`) | No     |
 
-### Comment sign-in (optional OAuth)
+### Comment sign-in (required OAuth)
 
-Out of the box, commenting is anonymous: viewers pick a display name and an id in localStorage lets them edit their own comments. If you'd rather require sign-in, configure GitHub and/or Google OAuth — once either provider's credentials are set, posting a comment requires signing in and comments carry the account's name and avatar.
+Comments and likes always require a signed-in viewer — there is no anonymous/guest path. Configure GitHub and/or Google OAuth to turn the features on; without at least one provider configured, the comment box and like button simply don't appear on share pages, since there'd be no way to sign in. Comments carry the signed-in account's name and avatar.
 
 There is no central auth service: you register your own OAuth app, and viewers sign in against your deployment only. Sessions are stateless HMAC-signed cookies — no extra tables, nothing to manage.
 
@@ -292,7 +305,7 @@ wrangler secret put GOOGLE_CLIENT_ID
 wrangler secret put GOOGLE_CLIENT_SECRET
 ```
 
-Configure one provider or both — only configured providers show up as sign-in buttons. Remove the secrets to fall back to anonymous commenting.
+Configure one provider or both — only configured providers show up as sign-in buttons. Removing both secrets turns off comments and likes entirely (no anonymous fallback).
 
 ### Bindings (auto-provisioned)
 

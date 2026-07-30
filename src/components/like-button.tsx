@@ -2,15 +2,14 @@ import { Button } from "@cloudflare/kumo/components/button";
 import { useEffect, useRef, useState } from "react";
 import type { AuthState } from "@/lib/use-auth";
 import { SignInPopover } from "@/components/sign-in-popover";
-import { getViewerId } from "@/lib/viewer-identity";
 
 /** px the burst particles travel; matches the CSS animation scale. */
 const PARTICLE_DISTANCE = 20;
 
 interface LikeButtonProps {
   uploadId: string;
-  /** Shared auth state from useAuth; null while it loads. */
-  auth: AuthState | null;
+  /** Shared auth state, resolved server-side. */
+  auth: AuthState;
   /** Server-rendered like total, so the count never flashes in. */
   initialCount: number;
   size?: "sm" | "base";
@@ -36,16 +35,14 @@ export function LikeButton({
   // Kumo button so the CSS hooks don't depend on its class merging.
   const rootRef = useRef<HTMLSpanElement>(null);
 
-  // Whether this viewer already liked — session cookie decides when auth
-  // is enabled; the anonymous localStorage id otherwise.
+  // Whether this viewer already liked, per the session cookie.
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
       try {
-        const res = await fetch(
-          `/api/likes/${uploadId}?viewerId=${encodeURIComponent(getViewerId())}`,
-          { signal: controller.signal },
-        );
+        const res = await fetch(`/api/likes/${uploadId}`, {
+          signal: controller.signal,
+        });
         if (!res.ok) return;
         const data: { count: number; liked: boolean } = JSON.parse(
           await res.text(),
@@ -97,7 +94,7 @@ export function LikeButton({
   };
 
   const toggle = async () => {
-    if (!auth || pending) return;
+    if (pending) return;
     const next = !liked;
     setPending(true);
     setLiked(next);
@@ -109,9 +106,7 @@ export function LikeButton({
       const res = await fetch(`/api/likes/${uploadId}`, {
         method: next ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          auth.authEnabled ? {} : { viewerId: getViewerId() },
-        ),
+        body: "{}",
       });
       if (res.ok) {
         const data: { count: number; liked: boolean } = JSON.parse(
@@ -131,7 +126,7 @@ export function LikeButton({
     }
   };
 
-  const signedOut = auth?.authEnabled === true && auth.user === null;
+  const signedOut = auth.authEnabled && auth.user === null;
   const button = (
     <Button
       variant="secondary"

@@ -1,8 +1,9 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestUrl } from "@tanstack/react-start/server";
+import { getRequest, getRequestUrl } from "@tanstack/react-start/server";
 import { ShareViewer } from "@/components/share-viewer";
 import { VideoShare } from "@/components/video-share";
+import { getAuthState } from "@/lib/auth.server";
 import {
   getAuthor,
   getLikeCount,
@@ -27,6 +28,9 @@ const loadShare = createServerFn({ method: "GET" })
       origin: getRequestUrl().origin,
       transcript,
       likeCount: await getLikeCount(id),
+      // Resolved here (not client-side) so the comments/likes UI never
+      // has to flash in once a follow-up request comes back.
+      auth: await getAuthState(getRequest()),
     };
   });
 

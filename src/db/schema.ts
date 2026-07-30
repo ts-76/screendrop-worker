@@ -35,6 +35,12 @@ export const uploads = sqliteTable(
     // Optional JSON array of { title, start } chapter markers.
     chapters: text("chapters"),
     views: integer("views").notNull().default(0),
+    // Off switch for comments + likes on this upload, chosen at upload
+    // time. When false, both features are hidden on the share page and
+    // rejected server-side.
+    socialEnabled: integer("social_enabled", { mode: "boolean" })
+      .notNull()
+      .default(true),
   },
   (table) => [index("idx_uploads_created_at").on(table.createdAt)],
 );

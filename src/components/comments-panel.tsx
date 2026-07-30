@@ -1,4 +1,3 @@
-import { Button } from "@cloudflare/kumo/components/button";
 import {
   CheckIcon,
   ClockIcon,
@@ -12,11 +11,6 @@ import type { Comment } from "@/db/schema";
 import type { AuthState } from "@/lib/use-auth";
 import { SignInPopover } from "@/components/sign-in-popover";
 import { formatDuration, formatTimeAgo } from "@/lib/format";
-import {
-  getViewerId,
-  getViewerName,
-  setViewerName,
-} from "@/lib/viewer-identity";
 
 function Avatar({
   name,
@@ -42,10 +36,11 @@ function Avatar({
 
 interface CommentsPanelProps {
   uploadId: string;
-  currentTime: number;
-  onSeek: (time: number) => void;
-  /** Shared auth state from useAuth; null while it loads. */
-  auth: AuthState | null;
+  /** Omit for media with no timeline (screenshots) — hides timestamp UI. */
+  currentTime?: number;
+  onSeek?: (time: number) => void;
+  /** Shared auth state, resolved server-side. */
+  auth: AuthState;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -53,8 +48,9 @@ interface CommentsPanelProps {
 /**
  * The comments panel, ported from Bloom: timestamped comments that seek
  * the player and inline edit/delete for the viewer's own comments.
- * Identity is either the OAuth session (when the deployment configures
- * it) or an anonymous localStorage viewer id.
+ * Identity is always the OAuth session — the parent only renders this
+ * panel once auth is confirmed enabled, so posting always has a signed-in
+ * user behind it; a signed-out viewer instead sees a sign-in prompt.
  */
 export function CommentsPanel({
   uploadId,
@@ -67,24 +63,15 @@ export function CommentsPanel({
   const [comments, setComments] = useState<Array<Comment>>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
-  const [name, setName] = useState("");
   const [attachTimestamp, setAttachTimestamp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
-  const [showNamePrompt, setShowNamePrompt] = useState(false);
-  const [viewerId, setViewerId] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  // localStorage only exists client-side; resolve identity after mount.
-  useEffect(() => {
-    setViewerId(getViewerId());
-    setName(getViewerName());
-  }, []);
-
-  const authEnabled = auth?.authEnabled ?? false;
-  const user = auth?.user ?? null;
+  const user = auth.user;
+  const hasTimeline = typeof onSeek === "function";
 
   // Fetch comments
   const fetchComments = useCallback(async () => {
@@ -117,13 +104,6 @@ export function CommentsPanel({
     const trimmed = text.trim();
     if (!trimmed || submitting) return;
 
-    // Anonymous mode needs a display name; signed-in identity comes
-    // from the session cookie server-side.
-    if (!authEnabled && !name.trim()) {
-      setShowNamePrompt(true);
-      return;
-    }
-
     setSubmitting(true);
     try {
       const res = await fetch(`/api/comments/${uploadId}`, {
@@ -131,8 +111,7 @@ export function CommentsPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: trimmed,
-          timestamp: attachTimestamp ? currentTime : null,
-          ...(authEnabled ? {} : { viewerId, authorName: name.trim() }),
+          timestamp: attachTimestamp ? (currentTime ?? null) : null,
         }),
       });
 
@@ -149,14 +128,6 @@ export function CommentsPanel({
     }
   };
 
-  // Submit after name is set from prompt
-  const handleNameSubmit = () => {
-    if (!name.trim()) return;
-    setViewerName(name.trim());
-    setShowNamePrompt(false);
-    void handleSubmit();
-  };
-
   // Edit a comment
   const handleEdit = async (commentId: string) => {
     const trimmed = editText.trim();
@@ -168,7 +139,6 @@ export function CommentsPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           commentId,
-          viewerId,
           text: trimmed,
         }),
       });
@@ -192,7 +162,7 @@ export function CommentsPanel({
       const res = await fetch(`/api/comments/${uploadId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commentId, viewerId }),
+        body: JSON.stringify({ commentId }),
       });
 
       if (res.ok) {
@@ -203,48 +173,11 @@ export function CommentsPanel({
     }
   };
 
-  // Handle name change
-  const handleNameChange = (newName: string) => {
-    setName(newName);
-    setViewerName(newName);
-  };
-
   return (
     <div
       className={`flex flex-col overflow-hidden ${className ?? ""}`}
       style={style}
     >
-      {/* Name prompt overlay */}
-      {showNamePrompt && (
-        <div className="shrink-0 rounded-xl bg-neutral-50 px-4 py-3">
-          <p className="mb-2 text-xs text-neutral-600">What's your name?</p>
-          <div className="flex gap-2">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleNameSubmit()}
-              placeholder="Your name"
-              autoFocus
-              className="flex-1 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm transition-colors placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-900/10 focus:outline-none"
-            />
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleNameSubmit}
-              disabled={!name.trim()}
-            >
-              Save
-            </Button>
-            <button
-              onClick={() => setShowNamePrompt(false)}
-              className="cursor-pointer p-1.5 text-neutral-400 transition-colors hover:text-neutral-600"
-            >
-              <XIcon size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Comments list */}
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {loading ? (
@@ -259,9 +192,7 @@ export function CommentsPanel({
           </div>
         ) : (
           comments.map((item) => {
-            const isOwn = authEnabled
-              ? user !== null && item.viewerId === user.id
-              : item.viewerId === viewerId;
+            const isOwn = user !== null && item.viewerId === user.id;
             const isEditing = editingId === item.id;
 
             return (
@@ -279,7 +210,7 @@ export function CommentsPanel({
                     <span className="text-xs text-neutral-400">
                       &middot; {formatTimeAgo(item.createdAt)}
                     </span>
-                    {item.timestamp !== null && (
+                    {item.timestamp !== null && onSeek && (
                       <button
                         onClick={() => onSeek(item.timestamp!)}
                         className="inline-flex cursor-pointer items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-700 transition-colors hover:bg-neutral-200"
@@ -358,7 +289,7 @@ export function CommentsPanel({
       </div>
 
       {/* Comment input */}
-      {auth !== null && authEnabled && !user ? (
+      {!user ? (
         /* Signed out: the input row keeps its shape, and interacting
            with it opens the sign-in popover right where they typed. */
         <div className="shrink-0 border-t border-neutral-100 px-4 py-3">
@@ -369,37 +300,20 @@ export function CommentsPanel({
                 providers={auth.providers}
                 title="Sign in to comment"
                 trigger={
-                  <input
-                    readOnly
-                    placeholder="Add a comment..."
-                    className="w-full cursor-pointer rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm transition-colors placeholder:text-neutral-400 hover:border-neutral-300 focus:outline-none"
-                  />
+                  // A real input's `readonly` placeholder doesn't render in
+                  // WebKit, so this is a div styled to match instead.
+                  <div className="w-full cursor-pointer rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-400 transition-colors hover:border-neutral-300">
+                    Add a comment...
+                  </div>
                 }
               />
             </div>
           </div>
         </div>
-      ) : auth !== null ? (
+      ) : (
         <div className="shrink-0 border-t border-neutral-100 px-4 py-3">
-          {/* Name display / edit row (anonymous mode) */}
-          {!authEnabled && name && (
-            <div className="mb-2 flex items-center gap-2">
-              <span className="text-xs text-neutral-400">Commenting as</span>
-              <input
-                value={name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                className="border-b border-transparent bg-transparent px-0 py-0 text-xs font-medium text-neutral-700 transition-colors hover:border-neutral-300 focus:border-neutral-500 focus:outline-none"
-                style={{ width: `${Math.max(name.length, 4)}ch` }}
-              />
-            </div>
-          )}
-
           <div className="flex items-center gap-3">
-            <Avatar
-              name={user?.name || name || viewerId || "anonymous"}
-              src={user?.avatar}
-              size={32}
-            />
+            <Avatar name={user.name} src={user.avatar} size={32} />
             <div className="flex flex-1 items-center gap-2">
               <div className="relative flex-1">
                 <input
@@ -411,28 +325,30 @@ export function CommentsPanel({
                   }
                   placeholder="Add a comment..."
                   disabled={submitting}
-                  className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 pr-10 text-sm transition-colors placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-900/10 focus:outline-none disabled:opacity-50"
+                  className={`w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm transition-colors placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-900/10 focus:outline-none disabled:opacity-50 ${hasTimeline ? "pr-10" : ""}`}
                 />
                 {/* Timestamp toggle inside input */}
-                <button
-                  onClick={() => setAttachTimestamp((v) => !v)}
-                  title={
-                    attachTimestamp
-                      ? `Timestamp at ${formatDuration(currentTime)} (click to remove)`
-                      : "Attach current timestamp"
-                  }
-                  className={`absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer rounded p-1 transition-colors ${
-                    attachTimestamp
-                      ? "bg-neutral-200 text-neutral-900"
-                      : "text-neutral-400 hover:text-neutral-600"
-                  }`}
-                >
-                  <ClockIcon size={14} weight="bold"/>
-                </button>
+                {hasTimeline && (
+                  <button
+                    onClick={() => setAttachTimestamp((v) => !v)}
+                    title={
+                      attachTimestamp
+                        ? `Timestamp at ${formatDuration(currentTime ?? 0)} (click to remove)`
+                        : "Attach current timestamp"
+                    }
+                    className={`absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer rounded p-1 transition-colors ${
+                      attachTimestamp
+                        ? "bg-neutral-200 text-neutral-900"
+                        : "text-neutral-400 hover:text-neutral-600"
+                    }`}
+                  >
+                    <ClockIcon size={14} weight="bold"/>
+                  </button>
+                )}
               </div>
-              {attachTimestamp && (
+              {hasTimeline && attachTimestamp && (
                 <span className="font-mono text-xs whitespace-nowrap text-neutral-700">
-                  @{formatDuration(currentTime)}
+                  @{formatDuration(currentTime ?? 0)}
                 </span>
               )}
               <button
@@ -446,7 +362,7 @@ export function CommentsPanel({
             </div>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

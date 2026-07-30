@@ -17,6 +17,13 @@ function parseOptionalNumber(value: FormDataEntryValue | string | null) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+// Comments/likes are on by default; only an explicit "false"/"0" turns
+// them off for this upload.
+function parseSocialEnabled(value: FormDataEntryValue | string | null) {
+  if (typeof value !== "string") return true
+  return value !== "false" && value !== "0"
+}
+
 export const Route = createFileRoute("/api/upload")({
   server: {
     handlers: {
@@ -63,6 +70,7 @@ export const Route = createFileRoute("/api/upload")({
             mediaType,
             duration: parseOptionalNumber(formData.get("duration")),
             title,
+            socialEnabled: parseSocialEnabled(formData.get("social_enabled")),
           })
 
           const origin = new URL(request.url).origin
@@ -120,6 +128,9 @@ export const Route = createFileRoute("/api/upload")({
             mediaType,
             duration: parseOptionalNumber(request.headers.get("x-duration")),
             title,
+            socialEnabled: parseSocialEnabled(
+              request.headers.get("x-social-enabled"),
+            ),
           })
 
           const origin = new URL(request.url).origin

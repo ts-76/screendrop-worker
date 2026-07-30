@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import type { AuthState } from "@/lib/use-auth";
 
 /**
  * Optional OAuth sign-in for commenting. Self-hosters register their own
@@ -56,6 +57,25 @@ export function enabledProviders(): Array<ProviderId> {
 
 export function isAuthEnabled(): boolean {
   return enabledProviders().length > 0;
+}
+
+/**
+ * Full auth state for a request, resolved server-side so the share page
+ * renders with the right comments/likes UI on the very first paint —
+ * no client fetch, no flash from "hidden" to "visible" once a follow-up
+ * request comes back.
+ */
+export async function getAuthState(request: Request): Promise<AuthState> {
+  const providers = enabledProviders();
+  const authEnabled = providers.length > 0;
+  const sessionUser = authEnabled ? await getSessionUser(request) : null;
+  return {
+    authEnabled,
+    providers,
+    user: sessionUser
+      ? { id: sessionUser.sub, name: sessionUser.name, avatar: sessionUser.avatar }
+      : null,
+  };
 }
 
 // --- Signed cookies -------------------------------------------------------
