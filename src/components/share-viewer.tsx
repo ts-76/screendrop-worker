@@ -1,247 +1,252 @@
-import { SkeletonLine, useKumoToastManager } from "@cloudflare/kumo"
-import { Button, LinkButton } from "@cloudflare/kumo/components/button"
-import {
-  CopyIcon,
-  DownloadSimpleIcon,
-  LinkSimpleIcon,
-} from "@phosphor-icons/react"
-import { useEffect, useRef, useState } from "react"
-import type { Upload } from "@/db/schema"
-import type { Author } from "@/lib/uploads.server"
+import { SkeletonLine, useKumoToastManager } from "@cloudflare/kumo";
+import { Button, LinkButton } from "@cloudflare/kumo/components/button";
+import { CopyIcon, DownloadSimpleIcon } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import type { Upload } from "@/db/schema";
+import type { Author } from "@/lib/uploads.server";
+import type { AuthState } from "@/lib/use-auth";
+import { CommentsPanel } from "@/components/comments-panel";
+import { LikeButton } from "@/components/like-button";
+import { ShareHeader } from "@/components/share-header";
+import { formatBytes, formatTimeAgo, formatViews } from "@/lib/format";
+import { useAuth } from "@/lib/use-auth";
+import { recordShareView } from "@/lib/viewer-identity";
 
 interface ShareViewerProps {
-  upload: Upload
-  author: Author
-  origin: string
+  upload: Upload;
+  author: Author;
+  origin: string;
+  likeCount: number;
+  auth: AuthState;
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatTimeAgo(dateString: string): string {
-  const date = new Date(`${dateString.replace(" ", "T")}Z`)
-  const difference = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (difference < 60) return "just now"
-  if (difference < 3600) return `${Math.floor(difference / 60)} min ago`
-  if (difference < 86400) return `${Math.floor(difference / 3600)} hours ago`
-  if (difference < 2592000) {
-    return `${Math.floor(difference / 86400)} days ago`
-  }
-  return date.toLocaleDateString()
-}
-
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const remainingSeconds = Math.floor(seconds % 60)
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`
-  }
-  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`
-}
-
-function ViewerHeader({
+/** The screenshot share page, laid out like the video share page: sticky
+ *  header, media with a comments sidebar, and an info row below. */
+export function ShareViewer({
   upload,
   author,
-  mediaSource,
-  isImage,
-  showNotice,
-}: ShareViewerProps & {
-  mediaSource: string
-  isImage: boolean
-  showNotice: (message: string, variant?: "error") => void
-}) {
-  const dimensions =
-    upload.width && upload.height
-      ? `${upload.width} × ${upload.height}`
-      : null
-  const duration = upload.duration ? formatDuration(upload.duration) : null
+  origin,
+  likeCount,
+  auth: initialAuth,
+}: ShareViewerProps) {
+  const mediaSource = `${origin}/api/image/${upload.id}`;
+  const [loadedImageSource, setLoadedImageSource] = useState<string | null>(
+    null,
+  );
+  const [views, setViews] = useState(upload.views);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const toastManager = useKumoToastManager();
+  const { auth, signOut } = useAuth(initialAuth);
+  const imageLoaded = loadedImageSource === mediaSource;
+  // Comments/likes need both the upload's own switch and a deployment
+  // that actually has sign-in configured.
+  const showComments = upload.socialEnabled && auth.authEnabled;
 
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      showNotice("Link copied")
-    } catch {
-      showNotice("Failed to copy link", "error")
-    }
-  }
-
-  async function copyImage() {
-    try {
-      const response = await fetch(mediaSource)
-      const blob = await response.blob()
-      await navigator.clipboard.write([
-        new ClipboardItem({ [blob.type]: blob }),
-      ])
-      showNotice("Image copied")
-    } catch {
-      showNotice("Failed to copy image", "error")
-    }
-  }
-
-  const metadata = (
-    <>
-      {author.name}
-      {dimensions ? ` · ${dimensions}` : ""}
-      {duration ? ` · ${duration}` : ""}
-      {` · ${formatBytes(upload.size)} · ${formatTimeAgo(upload.createdAt)}`}
-    </>
-  )
-
-  const actions = (
-    <>
-      <Button
-        variant="ghost"
-        shape="square"
-        size="sm"
-        icon={LinkSimpleIcon}
-        aria-label="Copy link"
-        title="Copy link"
-        onClick={copyLink}
-      />
-      {isImage ? (
-        <Button
-          variant="ghost"
-          shape="square"
-          size="sm"
-          icon={CopyIcon}
-          aria-label="Copy image"
-          title="Copy image"
-          onClick={copyImage}
-        />
-      ) : null}
-      <LinkButton
-        href={mediaSource}
-        download={upload.filename}
-        variant="secondary"
-        size="sm"
-        icon={DownloadSimpleIcon}
-      >
-        Download
-      </LinkButton>
-    </>
-  )
-
-  return (
-    <>
-      <header className="order-1 flex items-center px-4">
-        <nav className="flex min-w-0 flex-1 items-center justify-between gap-4 py-2.5">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <img
-              src={author.avatar}
-              className="size-7 shrink-0 rounded-full"
-              alt={author.name}
-            />
-            <div className="min-w-0">
-              <p className="truncate font-medium text-neutral-500">
-                {upload.filename}
-              </p>
-              <p className="truncate text-xs font-medium text-neutral-500">
-                {metadata}
-              </p>
-            </div>
-          </div>
-          <div className="hidden shrink-0 items-center gap-1 sm:flex">
-            {actions}
-          </div>
-        </nav>
-      </header>
-      <div className="order-3 flex items-center justify-end gap-1 px-4 py-1.5 sm:hidden">
-        {actions}
-      </div>
-    </>
-  )
-}
-
-export function ShareViewer(props: ShareViewerProps) {
-  const { upload, origin } = props
-  const isVideo = upload.mediaType === "video"
-  const mediaSource = `${origin}/api/${isVideo ? "media" : "image"}/${upload.id}`
-  const [loadedImageSource, setLoadedImageSource] = useState<string | null>(null)
-  const imageRef = useRef<HTMLImageElement | null>(null)
-  const toastManager = useKumoToastManager()
-  const imageLoaded = loadedImageSource === mediaSource
+  // Count each viewer once, client-guarded — good enough without auth.
+  useEffect(() => {
+    void recordShareView(upload.id).then(
+      (counted) => counted && setViews((count) => count + 1),
+    );
+  }, [upload.id]);
 
   useEffect(() => {
-    const image = imageRef.current
-    if (!isVideo && image?.complete) {
-      setLoadedImageSource(mediaSource)
+    const image = imageRef.current;
+    if (image?.complete) {
+      setLoadedImageSource(mediaSource);
     }
-  }, [isVideo, mediaSource])
+  }, [mediaSource]);
 
   function showNotice(message: string, variant?: "error") {
-    toastManager.add({ title: message, variant })
+    toastManager.add({ title: message, variant });
   }
 
-  return (
-    <div className="relative isolate flex h-dvh w-full flex-col bg-neutral-100">
-      <ViewerHeader
-        {...props}
-        mediaSource={mediaSource}
-        isImage={!isVideo}
-        showNotice={showNotice}
-      />
+  const imageInfo = (
+    <ImageInfo
+      upload={upload}
+      author={author}
+      views={views}
+      likeCount={likeCount}
+      auth={auth}
+      showLike={showComments}
+      mediaSource={mediaSource}
+      onNotify={showNotice}
+    />
+  );
 
-      <main className="order-2 flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2">
-        <div className="flex grow items-center justify-center overflow-auto rounded-2xl bg-white shadow-xs ring-1 ring-neutral-950/5">
-          <div
-            className={`-mt-1 max-h-full w-full rounded-xl border border-neutral-300 p-1 ${isVideo ? "max-w-5xl" : "max-w-7xl bg-neutral-50"}`}
-          >
-            <div className="overflow-hidden rounded-lg shadow-md ring-1 shadow-black/7 ring-neutral-200">
-              {isVideo ? (
-                <video
-                  src={mediaSource}
-                  controls
-                  playsInline
-                  preload="metadata"
-                  className="w-full rounded-lg bg-black"
-                  style={{
-                    aspectRatio:
-                      upload.width && upload.height
-                        ? `${upload.width} / ${upload.height}`
-                        : "16 / 9",
-                  }}
+  return (
+    <div className="flex min-h-screen flex-col bg-neutral-50">
+      <ShareHeader user={auth.user} onSignOut={() => void signOut()} />
+
+      {/* Content: same YouTube-like layout as the video share page.
+          Without a sidebar, cap the width instead of letting the image
+          stretch edge-to-edge. */}
+      <div className="flex-1 overflow-auto px-0 py-0 lg:px-6 lg:py-6">
+        <div
+          className={`flex flex-col ${showComments ? "" : "mx-auto w-full max-w-5xl"}`}
+        >
+          {/* Row 1: Image + Sidebar */}
+          <div className="flex flex-col lg:flex-row lg:gap-6">
+            {/* Image */}
+            <div
+              className="w-full overflow-hidden rounded-none bg-neutral-100 ring-1 ring-neutral-200 lg:flex-1 lg:rounded-2xl"
+              style={{
+                aspectRatio:
+                  upload.width && upload.height
+                    ? `${upload.width} / ${upload.height}`
+                    : "16 / 9",
+                maxHeight: "calc(100vh - 56px - 240px)",
+              }}
+            >
+              {!imageLoaded && (
+                <SkeletonLine
+                  minWidth={100}
+                  maxWidth={100}
+                  minDuration={1.5}
+                  maxDuration={1.5}
+                  minDelay={0}
+                  maxDelay={0}
+                  className="h-full w-full"
                 />
-              ) : (
-                <>
-                  {!imageLoaded ? (
-                    <div
-                      className="w-full rounded-lg"
-                      style={{
-                        aspectRatio:
-                          upload.width && upload.height
-                            ? `${upload.width} / ${upload.height}`
-                          : "16 / 9",
-                      }}
-                    >
-                      <SkeletonLine
-                        minWidth={100}
-                        maxWidth={100}
-                        minDuration={1.5}
-                        maxDuration={1.5}
-                        minDelay={0}
-                        maxDelay={0}
-                        className="h-full w-full rounded-lg"
-                      />
-                    </div>
-                  ) : null}
-                  <img
-                    ref={imageRef}
-                    src={mediaSource}
-                    alt={upload.filename}
-                    className={`max-h-full w-full rounded-lg bg-white object-contain ${imageLoaded ? "block" : "hidden"}`}
-                    onLoad={() => setLoadedImageSource(mediaSource)}
-                    onError={() => setLoadedImageSource(mediaSource)}
-                  />
-                </>
               )}
+              <img
+                ref={imageRef}
+                src={mediaSource}
+                alt={upload.filename}
+                className={`h-full w-full object-contain ${imageLoaded ? "block" : "hidden"}`}
+                onLoad={() => setLoadedImageSource(mediaSource)}
+                onError={() => setLoadedImageSource(mediaSource)}
+              />
             </div>
+
+            {/* Sidebar */}
+            {showComments && (
+              <div
+                className="hidden shrink-0 flex-col lg:flex"
+                style={{
+                  width: "400px",
+                  maxHeight: "calc(100vh - 56px - 240px)",
+                }}
+              >
+                <CommentsPanel
+                  uploadId={upload.id}
+                  auth={auth}
+                  className="h-full"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Row 2: Image Info (constrained to image width) */}
+          <div
+            className={`mt-3 w-full px-4 lg:px-0 ${showComments ? "lg:max-w-[calc(100%-400px-1.5rem)]" : ""}`}
+          >
+            {imageInfo}
+          </div>
+
+          {/* Mobile-only: Sidebar below content */}
+          {showComments && (
+            <div className="mt-4 px-4 lg:hidden">
+              <div className="flex flex-col" style={{ maxHeight: "400px" }}>
+                <CommentsPanel uploadId={upload.id} auth={auth} />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImageInfo({
+  upload,
+  author,
+  views,
+  likeCount,
+  auth,
+  showLike,
+  mediaSource,
+  onNotify,
+}: {
+  upload: Upload;
+  author: Author;
+  views: number;
+  likeCount: number;
+  auth: AuthState;
+  showLike: boolean;
+  mediaSource: string;
+  onNotify: (message: string, variant?: "error") => void;
+}) {
+  const title = upload.title?.trim() || upload.filename;
+  const dimensions =
+    upload.width && upload.height ? `${upload.width} × ${upload.height}` : null;
+  const metadata = [dimensions, formatBytes(upload.size), formatTimeAgo(upload.createdAt)]
+    .filter(Boolean)
+    .join(" · ");
+
+  const handleCopyImage = async () => {
+    try {
+      const response = await fetch(mediaSource);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob }),
+      ]);
+      onNotify("Image copied");
+    } catch {
+      onNotify("Failed to copy image", "error");
+    }
+  };
+
+  return (
+    <div className="flex flex-col">
+      {/* Title */}
+      <h1 className="text-lg font-semibold text-neutral-900 lg:text-xl">
+        {title}
+      </h1>
+
+      {/* Author + Actions row */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        {/* Author */}
+        <div className="flex min-w-0 items-center gap-3">
+          <img
+            src={author.avatar}
+            alt={author.name}
+            className="size-10 shrink-0 rounded-full"
+          />
+          <div className="min-w-0">
+            <p className="font-medium text-neutral-900">{author.name}</p>
+            <p className="text-xs text-neutral-500">{metadata}</p>
           </div>
         </div>
-      </main>
+
+        {/* Actions */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 flex items-center gap-1.5 text-sm font-medium text-neutral-500">
+            {formatViews(views)}
+          </span>
+          {showLike && (
+            <LikeButton
+              uploadId={upload.id}
+              auth={auth}
+              initialCount={likeCount}
+            />
+          )}
+          <Button
+            variant="secondary"
+            icon={<CopyIcon weight="bold" />}
+            onClick={() => void handleCopyImage()}
+          >
+            Copy Image
+          </Button>
+          <LinkButton
+            href={mediaSource}
+            download={upload.filename}
+            variant="secondary"
+            icon={<DownloadSimpleIcon weight="bold" />}
+          >
+            Download
+          </LinkButton>
+        </div>
+      </div>
     </div>
-  )
+  );
 }

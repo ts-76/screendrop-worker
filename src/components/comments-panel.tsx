@@ -1,0 +1,368 @@
+import {
+  CheckIcon,
+  ClockIcon,
+  PaperPlaneRightIcon,
+  PencilSimpleIcon,
+  TrashIcon,
+  XIcon,
+} from "@phosphor-icons/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Comment } from "@/db/schema";
+import type { AuthState } from "@/lib/use-auth";
+import { SignInPopover } from "@/components/sign-in-popover";
+import { formatDuration, formatTimeAgo } from "@/lib/format";
+
+function Avatar({
+  name,
+  src,
+  size = 32,
+}: {
+  name: string;
+  src?: string | null;
+  size?: number;
+}) {
+  return (
+    <img
+      src={
+        src ||
+        `https://api.dicebear.com/10.x/glyphs/svg?seed=${encodeURIComponent(name)}`
+      }
+      alt={name}
+      className="shrink-0 rounded-full"
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
+interface CommentsPanelProps {
+  uploadId: string;
+  /** Omit for media with no timeline (screenshots) — hides timestamp UI. */
+  currentTime?: number;
+  onSeek?: (time: number) => void;
+  /** Shared auth state, resolved server-side. */
+  auth: AuthState;
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+/**
+ * The comments panel, ported from Bloom: timestamped comments that seek
+ * the player and inline edit/delete for the viewer's own comments.
+ * Identity is always the OAuth session — the parent only renders this
+ * panel once auth is confirmed enabled, so posting always has a signed-in
+ * user behind it; a signed-out viewer instead sees a sign-in prompt.
+ */
+export function CommentsPanel({
+  uploadId,
+  currentTime,
+  onSeek,
+  auth,
+  className,
+  style,
+}: CommentsPanelProps) {
+  const [comments, setComments] = useState<Array<Comment>>([]);
+  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState("");
+  const [attachTimestamp, setAttachTimestamp] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const user = auth.user;
+  const hasTimeline = typeof onSeek === "function";
+
+  // Fetch comments
+  const fetchComments = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/comments/${uploadId}`);
+      if (res.ok) {
+        const data: { comments: Array<Comment> } = JSON.parse(await res.text());
+        setComments(data.comments);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, [uploadId]);
+
+  useEffect(() => {
+    void fetchComments();
+  }, [fetchComments]);
+
+  // Focus edit input when editing starts
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      editInputRef.current.focus();
+    }
+  }, [editingId]);
+
+  // Submit a new comment
+  const handleSubmit = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || submitting) return;
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/comments/${uploadId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: trimmed,
+          timestamp: attachTimestamp ? (currentTime ?? null) : null,
+        }),
+      });
+
+      if (res.ok) {
+        const data: { comment: Comment } = JSON.parse(await res.text());
+        setComments((prev) => [...prev, data.comment]);
+        setText("");
+        setAttachTimestamp(false);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Edit a comment
+  const handleEdit = async (commentId: string) => {
+    const trimmed = editText.trim();
+    if (!trimmed) return;
+
+    try {
+      const res = await fetch(`/api/comments/${uploadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          commentId,
+          text: trimmed,
+        }),
+      });
+
+      if (res.ok) {
+        const data: { comment: Comment } = JSON.parse(await res.text());
+        setComments((prev) =>
+          prev.map((c) => (c.id === commentId ? data.comment : c)),
+        );
+        setEditingId(null);
+        setEditText("");
+      }
+    } catch {
+      // silently fail
+    }
+  };
+
+  // Delete a comment
+  const handleDelete = async (commentId: string) => {
+    try {
+      const res = await fetch(`/api/comments/${uploadId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId }),
+      });
+
+      if (res.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+      }
+    } catch {
+      // silently fail
+    }
+  };
+
+  return (
+    <div
+      className={`flex flex-col overflow-hidden ${className ?? ""}`}
+      style={style}
+    >
+      {/* Comments list */}
+      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="size-5 animate-spin rounded-full border-2 border-neutral-900 border-t-transparent" />
+          </div>
+        ) : comments.length === 0 ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-neutral-400">
+              No comments yet. Be the first!
+            </p>
+          </div>
+        ) : (
+          comments.map((item) => {
+            const isOwn = user !== null && item.viewerId === user.id;
+            const isEditing = editingId === item.id;
+
+            return (
+              <div key={item.id} className="group flex gap-3">
+                <Avatar
+                  name={item.authorName}
+                  src={item.authorAvatar}
+                  size={32}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-neutral-900">
+                      {item.authorName}
+                    </span>
+                    <span className="text-xs text-neutral-400">
+                      &middot; {formatTimeAgo(item.createdAt)}
+                    </span>
+                    {item.timestamp !== null && onSeek && (
+                      <button
+                        onClick={() => onSeek(item.timestamp!)}
+                        className="inline-flex cursor-pointer items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-700 transition-colors hover:bg-neutral-200"
+                      >
+                        <ClockIcon size={10} weight="bold"/>
+                        {formatDuration(item.timestamp)}
+                      </button>
+                    )}
+                    {/* Edit / Delete actions (own comments only) */}
+                    {isOwn && !isEditing && (
+                      <div className="ml-auto flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <button
+                          onClick={() => {
+                            setEditingId(item.id);
+                            setEditText(item.text);
+                          }}
+                          className="cursor-pointer p-1 text-neutral-400 transition-colors hover:text-neutral-600"
+                          title="Edit"
+                        >
+                          <PencilSimpleIcon size={12} />
+                        </button>
+                        <button
+                          onClick={() => void handleDelete(item.id)}
+                          className="cursor-pointer p-1 text-neutral-400 transition-colors hover:text-red-500"
+                          title="Delete"
+                        >
+                          <TrashIcon size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {isEditing ? (
+                    <div className="mt-1 flex items-center gap-2">
+                      <input
+                        ref={editInputRef}
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void handleEdit(item.id);
+                          if (e.key === "Escape") {
+                            setEditingId(null);
+                            setEditText("");
+                          }
+                        }}
+                        className="flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm transition-colors focus:border-neutral-400 focus:ring-2 focus:ring-neutral-900/10 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => void handleEdit(item.id)}
+                        className="cursor-pointer p-1 text-green-600 transition-colors hover:text-green-700"
+                        title="Save"
+                      >
+                        <CheckIcon size={14} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingId(null);
+                          setEditText("");
+                        }}
+                        className="cursor-pointer p-1 text-neutral-400 transition-colors hover:text-neutral-600"
+                        title="Cancel"
+                      >
+                        <XIcon size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-0.5 text-sm text-neutral-600">
+                      {item.text}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Comment input */}
+      {!user ? (
+        /* Signed out: the input row keeps its shape, and interacting
+           with it opens the sign-in popover right where they typed. */
+        <div className="shrink-0 border-t border-neutral-100 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Avatar name="Guest" size={32} />
+            <div className="min-w-0 flex-1">
+              <SignInPopover
+                providers={auth.providers}
+                title="Sign in to comment"
+                trigger={
+                  // A real input's `readonly` placeholder doesn't render in
+                  // WebKit, so this is a div styled to match instead.
+                  <div className="w-full cursor-pointer rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-400 transition-colors hover:border-neutral-300">
+                    Add a comment...
+                  </div>
+                }
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="shrink-0 border-t border-neutral-100 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Avatar name={user.name} src={user.avatar} size={32} />
+            <div className="flex flex-1 items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  ref={inputRef}
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && !e.shiftKey && void handleSubmit()
+                  }
+                  placeholder="Add a comment..."
+                  disabled={submitting}
+                  className={`w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm transition-colors placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-900/10 focus:outline-none disabled:opacity-50 ${hasTimeline ? "pr-10" : ""}`}
+                />
+                {/* Timestamp toggle inside input */}
+                {hasTimeline && (
+                  <button
+                    onClick={() => setAttachTimestamp((v) => !v)}
+                    title={
+                      attachTimestamp
+                        ? `Timestamp at ${formatDuration(currentTime ?? 0)} (click to remove)`
+                        : "Attach current timestamp"
+                    }
+                    className={`absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer rounded p-1 transition-colors ${
+                      attachTimestamp
+                        ? "bg-neutral-200 text-neutral-900"
+                        : "text-neutral-400 hover:text-neutral-600"
+                    }`}
+                  >
+                    <ClockIcon size={14} weight="bold"/>
+                  </button>
+                )}
+              </div>
+              {hasTimeline && attachTimestamp && (
+                <span className="font-mono text-xs whitespace-nowrap text-neutral-700">
+                  @{formatDuration(currentTime ?? 0)}
+                </span>
+              )}
+              <button
+                onClick={() => void handleSubmit()}
+                disabled={!text.trim() || submitting}
+                className="cursor-pointer rounded-lg p-2 text-neutral-900 transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30"
+                title="Send"
+              >
+                <PaperPlaneRightIcon size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

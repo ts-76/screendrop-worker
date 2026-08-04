@@ -14,6 +14,18 @@
       },
       "AUTHOR_AVATAR": {
         "description": "Optional. Avatar URL shown on shared pages, e.g. `https://github.com/your-username.png`."
+      },
+      "GITHUB_CLIENT_ID": {
+        "description": "Optional. Enables 'Sign in with GitHub' for comments. Create an OAuth app at https://github.com/settings/developers with callback `https://<your-worker>/api/auth/callback/github`, then paste the client id here (and the secret below). Leave blank to keep anonymous commenting."
+      },
+      "GITHUB_CLIENT_SECRET": {
+        "description": "Optional. Client secret of the GitHub OAuth app above."
+      },
+      "GOOGLE_CLIENT_ID": {
+        "description": "Optional. Enables 'Sign in with Google' for comments. Create an OAuth client at https://console.cloud.google.com/apis/credentials (type: Web application) with redirect URI `https://<your-worker>/api/auth/callback/google`, then paste the client id here (and the secret below). Leave blank to keep anonymous commenting."
+      },
+      "GOOGLE_CLIENT_SECRET": {
+        "description": "Optional. Client secret of the Google OAuth client above."
       }
     }
   },
@@ -42,6 +54,7 @@
     "@tanstack/react-router-ssr-query": "^1.167.1",
     "@tanstack/react-start": "^1.168.27",
     "@tanstack/router-plugin": "^1.168.19",
+    "@videojs/react": "10.0.0-beta.25",
     "drizzle-orm": "^0.45.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

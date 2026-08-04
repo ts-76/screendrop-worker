@@ -15,6 +15,8 @@ const registerUploadSchema = z.object({
   height: z.number().int().nullable().optional(),
   media_type: z.string().optional(),
   duration: z.number().nonnegative().nullable().optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+  social_enabled: z.boolean().optional(),
 })
 
 export const Route = createFileRoute("/api/register")({
@@ -57,6 +59,8 @@ export const Route = createFileRoute("/api/register")({
             r2Key: data.r2_key,
             mediaType,
             duration: data.duration ?? null,
+            title: data.title ?? null,
+            socialEnabled: data.social_enabled ?? true,
           })
 
           const origin = new URL(request.url).origin

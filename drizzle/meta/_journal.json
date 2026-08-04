@@ -8,6 +8,41 @@
       "when": 1784314577238,
       "tag": "0000_keen_azazel",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784320138182,
+      "tag": "0001_sharp_maverick",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784355801380,
+      "tag": "0002_zippy_risque",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784459652976,
+      "tag": "0003_smiling_baron_strucker",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784522166148,
+      "tag": "0004_jittery_war_machine",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1785424148358,
+      "tag": "0005_stormy_puck",
+      "breakpoints": true
     }
   ]
 }

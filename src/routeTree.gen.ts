@@ -16,8 +16,21 @@ import { Route as ApiUploadRouteImport } from './routes/api/upload'
 import { Route as ApiSetupRouteImport } from './routes/api/setup'
 import { Route as ApiRegisterRouteImport } from './routes/api/register'
 import { Route as ApiPingRouteImport } from './routes/api/ping'
+import { Route as ApiViewIdRouteImport } from './routes/api/view.$id'
+import { Route as ApiUploadIdRouteImport } from './routes/api/upload.$id'
+import { Route as ApiStoryboardIdRouteImport } from './routes/api/storyboard.$id'
+import { Route as ApiStoryboardVttIdRouteImport } from './routes/api/storyboard-vtt.$id'
+import { Route as ApiPosterIdRouteImport } from './routes/api/poster.$id'
 import { Route as ApiMediaIdRouteImport } from './routes/api/media.$id'
+import { Route as ApiLikesIdRouteImport } from './routes/api/likes.$id'
 import { Route as ApiImageIdRouteImport } from './routes/api/image.$id'
+import { Route as ApiCommentsIdRouteImport } from './routes/api/comments.$id'
+import { Route as ApiCaptionsIdRouteImport } from './routes/api/captions.$id'
+import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
+import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
+import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
+import { Route as ApiAssetsIdRouteImport } from './routes/api/assets.$id'
+import { Route as ApiAuthCallbackProviderRouteImport } from './routes/api/auth/callback.$provider'
 
 const IdRoute = IdRouteImport.update({
   id: '/$id',
@@ -54,14 +67,79 @@ const ApiPingRoute = ApiPingRouteImport.update({
   path: '/api/ping',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiViewIdRoute = ApiViewIdRouteImport.update({
+  id: '/api/view/$id',
+  path: '/api/view/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadIdRoute = ApiUploadIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiUploadRoute,
+} as any)
+const ApiStoryboardIdRoute = ApiStoryboardIdRouteImport.update({
+  id: '/api/storyboard/$id',
+  path: '/api/storyboard/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiStoryboardVttIdRoute = ApiStoryboardVttIdRouteImport.update({
+  id: '/api/storyboard-vtt/$id',
+  path: '/api/storyboard-vtt/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPosterIdRoute = ApiPosterIdRouteImport.update({
+  id: '/api/poster/$id',
+  path: '/api/poster/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMediaIdRoute = ApiMediaIdRouteImport.update({
   id: '/api/media/$id',
   path: '/api/media/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiLikesIdRoute = ApiLikesIdRouteImport.update({
+  id: '/api/likes/$id',
+  path: '/api/likes/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiImageIdRoute = ApiImageIdRouteImport.update({
   id: '/api/image/$id',
   path: '/api/image/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCommentsIdRoute = ApiCommentsIdRouteImport.update({
+  id: '/api/comments/$id',
+  path: '/api/comments/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCaptionsIdRoute = ApiCaptionsIdRouteImport.update({
+  id: '/api/captions/$id',
+  path: '/api/captions/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthMeRoute = ApiAuthMeRouteImport.update({
+  id: '/api/auth/me',
+  path: '/api/auth/me',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
+  id: '/api/auth/logout',
+  path: '/api/auth/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
+  id: '/api/auth/login',
+  path: '/api/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAssetsIdRoute = ApiAssetsIdRouteImport.update({
+  id: '/api/assets/$id',
+  path: '/api/assets/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthCallbackProviderRoute = ApiAuthCallbackProviderRouteImport.update({
+  id: '/api/auth/callback/$provider',
+  path: '/api/auth/callback/$provider',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -71,10 +149,23 @@ export interface FileRoutesByFullPath {
   '/api/ping': typeof ApiPingRoute
   '/api/register': typeof ApiRegisterRoute
   '/api/setup': typeof ApiSetupRoute
-  '/api/upload': typeof ApiUploadRoute
+  '/api/upload': typeof ApiUploadRouteWithChildren
   '/api/version': typeof ApiVersionRoute
+  '/api/assets/$id': typeof ApiAssetsIdRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/captions/$id': typeof ApiCaptionsIdRoute
+  '/api/comments/$id': typeof ApiCommentsIdRoute
   '/api/image/$id': typeof ApiImageIdRoute
+  '/api/likes/$id': typeof ApiLikesIdRoute
   '/api/media/$id': typeof ApiMediaIdRoute
+  '/api/poster/$id': typeof ApiPosterIdRoute
+  '/api/storyboard-vtt/$id': typeof ApiStoryboardVttIdRoute
+  '/api/storyboard/$id': typeof ApiStoryboardIdRoute
+  '/api/upload/$id': typeof ApiUploadIdRoute
+  '/api/view/$id': typeof ApiViewIdRoute
+  '/api/auth/callback/$provider': typeof ApiAuthCallbackProviderRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -82,10 +173,23 @@ export interface FileRoutesByTo {
   '/api/ping': typeof ApiPingRoute
   '/api/register': typeof ApiRegisterRoute
   '/api/setup': typeof ApiSetupRoute
-  '/api/upload': typeof ApiUploadRoute
+  '/api/upload': typeof ApiUploadRouteWithChildren
   '/api/version': typeof ApiVersionRoute
+  '/api/assets/$id': typeof ApiAssetsIdRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/captions/$id': typeof ApiCaptionsIdRoute
+  '/api/comments/$id': typeof ApiCommentsIdRoute
   '/api/image/$id': typeof ApiImageIdRoute
+  '/api/likes/$id': typeof ApiLikesIdRoute
   '/api/media/$id': typeof ApiMediaIdRoute
+  '/api/poster/$id': typeof ApiPosterIdRoute
+  '/api/storyboard-vtt/$id': typeof ApiStoryboardVttIdRoute
+  '/api/storyboard/$id': typeof ApiStoryboardIdRoute
+  '/api/upload/$id': typeof ApiUploadIdRoute
+  '/api/view/$id': typeof ApiViewIdRoute
+  '/api/auth/callback/$provider': typeof ApiAuthCallbackProviderRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -94,10 +198,23 @@ export interface FileRoutesById {
   '/api/ping': typeof ApiPingRoute
   '/api/register': typeof ApiRegisterRoute
   '/api/setup': typeof ApiSetupRoute
-  '/api/upload': typeof ApiUploadRoute
+  '/api/upload': typeof ApiUploadRouteWithChildren
   '/api/version': typeof ApiVersionRoute
+  '/api/assets/$id': typeof ApiAssetsIdRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/captions/$id': typeof ApiCaptionsIdRoute
+  '/api/comments/$id': typeof ApiCommentsIdRoute
   '/api/image/$id': typeof ApiImageIdRoute
+  '/api/likes/$id': typeof ApiLikesIdRoute
   '/api/media/$id': typeof ApiMediaIdRoute
+  '/api/poster/$id': typeof ApiPosterIdRoute
+  '/api/storyboard-vtt/$id': typeof ApiStoryboardVttIdRoute
+  '/api/storyboard/$id': typeof ApiStoryboardIdRoute
+  '/api/upload/$id': typeof ApiUploadIdRoute
+  '/api/view/$id': typeof ApiViewIdRoute
+  '/api/auth/callback/$provider': typeof ApiAuthCallbackProviderRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -109,8 +226,21 @@ export interface FileRouteTypes {
     | '/api/setup'
     | '/api/upload'
     | '/api/version'
+    | '/api/assets/$id'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/me'
+    | '/api/captions/$id'
+    | '/api/comments/$id'
     | '/api/image/$id'
+    | '/api/likes/$id'
     | '/api/media/$id'
+    | '/api/poster/$id'
+    | '/api/storyboard-vtt/$id'
+    | '/api/storyboard/$id'
+    | '/api/upload/$id'
+    | '/api/view/$id'
+    | '/api/auth/callback/$provider'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -120,8 +250,21 @@ export interface FileRouteTypes {
     | '/api/setup'
     | '/api/upload'
     | '/api/version'
+    | '/api/assets/$id'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/me'
+    | '/api/captions/$id'
+    | '/api/comments/$id'
     | '/api/image/$id'
+    | '/api/likes/$id'
     | '/api/media/$id'
+    | '/api/poster/$id'
+    | '/api/storyboard-vtt/$id'
+    | '/api/storyboard/$id'
+    | '/api/upload/$id'
+    | '/api/view/$id'
+    | '/api/auth/callback/$provider'
   id:
     | '__root__'
     | '/'
@@ -131,8 +274,21 @@ export interface FileRouteTypes {
     | '/api/setup'
     | '/api/upload'
     | '/api/version'
+    | '/api/assets/$id'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/me'
+    | '/api/captions/$id'
+    | '/api/comments/$id'
     | '/api/image/$id'
+    | '/api/likes/$id'
     | '/api/media/$id'
+    | '/api/poster/$id'
+    | '/api/storyboard-vtt/$id'
+    | '/api/storyboard/$id'
+    | '/api/upload/$id'
+    | '/api/view/$id'
+    | '/api/auth/callback/$provider'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -141,10 +297,22 @@ export interface RootRouteChildren {
   ApiPingRoute: typeof ApiPingRoute
   ApiRegisterRoute: typeof ApiRegisterRoute
   ApiSetupRoute: typeof ApiSetupRoute
-  ApiUploadRoute: typeof ApiUploadRoute
+  ApiUploadRoute: typeof ApiUploadRouteWithChildren
   ApiVersionRoute: typeof ApiVersionRoute
+  ApiAssetsIdRoute: typeof ApiAssetsIdRoute
+  ApiAuthLoginRoute: typeof ApiAuthLoginRoute
+  ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
+  ApiAuthMeRoute: typeof ApiAuthMeRoute
+  ApiCaptionsIdRoute: typeof ApiCaptionsIdRoute
+  ApiCommentsIdRoute: typeof ApiCommentsIdRoute
   ApiImageIdRoute: typeof ApiImageIdRoute
+  ApiLikesIdRoute: typeof ApiLikesIdRoute
   ApiMediaIdRoute: typeof ApiMediaIdRoute
+  ApiPosterIdRoute: typeof ApiPosterIdRoute
+  ApiStoryboardVttIdRoute: typeof ApiStoryboardVttIdRoute
+  ApiStoryboardIdRoute: typeof ApiStoryboardIdRoute
+  ApiViewIdRoute: typeof ApiViewIdRoute
+  ApiAuthCallbackProviderRoute: typeof ApiAuthCallbackProviderRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -198,11 +366,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/view/$id': {
+      id: '/api/view/$id'
+      path: '/api/view/$id'
+      fullPath: '/api/view/$id'
+      preLoaderRoute: typeof ApiViewIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/upload/$id': {
+      id: '/api/upload/$id'
+      path: '/$id'
+      fullPath: '/api/upload/$id'
+      preLoaderRoute: typeof ApiUploadIdRouteImport
+      parentRoute: typeof ApiUploadRoute
+    }
+    '/api/storyboard/$id': {
+      id: '/api/storyboard/$id'
+      path: '/api/storyboard/$id'
+      fullPath: '/api/storyboard/$id'
+      preLoaderRoute: typeof ApiStoryboardIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/storyboard-vtt/$id': {
+      id: '/api/storyboard-vtt/$id'
+      path: '/api/storyboard-vtt/$id'
+      fullPath: '/api/storyboard-vtt/$id'
+      preLoaderRoute: typeof ApiStoryboardVttIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/poster/$id': {
+      id: '/api/poster/$id'
+      path: '/api/poster/$id'
+      fullPath: '/api/poster/$id'
+      preLoaderRoute: typeof ApiPosterIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/media/$id': {
       id: '/api/media/$id'
       path: '/api/media/$id'
       fullPath: '/api/media/$id'
       preLoaderRoute: typeof ApiMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/likes/$id': {
+      id: '/api/likes/$id'
+      path: '/api/likes/$id'
+      fullPath: '/api/likes/$id'
+      preLoaderRoute: typeof ApiLikesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/image/$id': {
@@ -212,8 +422,69 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImageIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/comments/$id': {
+      id: '/api/comments/$id'
+      path: '/api/comments/$id'
+      fullPath: '/api/comments/$id'
+      preLoaderRoute: typeof ApiCommentsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/captions/$id': {
+      id: '/api/captions/$id'
+      path: '/api/captions/$id'
+      fullPath: '/api/captions/$id'
+      preLoaderRoute: typeof ApiCaptionsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/me': {
+      id: '/api/auth/me'
+      path: '/api/auth/me'
+      fullPath: '/api/auth/me'
+      preLoaderRoute: typeof ApiAuthMeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/logout': {
+      id: '/api/auth/logout'
+      path: '/api/auth/logout'
+      fullPath: '/api/auth/logout'
+      preLoaderRoute: typeof ApiAuthLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/login': {
+      id: '/api/auth/login'
+      path: '/api/auth/login'
+      fullPath: '/api/auth/login'
+      preLoaderRoute: typeof ApiAuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/assets/$id': {
+      id: '/api/assets/$id'
+      path: '/api/assets/$id'
+      fullPath: '/api/assets/$id'
+      preLoaderRoute: typeof ApiAssetsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/callback/$provider': {
+      id: '/api/auth/callback/$provider'
+      path: '/api/auth/callback/$provider'
+      fullPath: '/api/auth/callback/$provider'
+      preLoaderRoute: typeof ApiAuthCallbackProviderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
+
+interface ApiUploadRouteChildren {
+  ApiUploadIdRoute: typeof ApiUploadIdRoute
+}
+
+const ApiUploadRouteChildren: ApiUploadRouteChildren = {
+  ApiUploadIdRoute: ApiUploadIdRoute,
+}
+
+const ApiUploadRouteWithChildren = ApiUploadRoute._addFileChildren(
+  ApiUploadRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -221,10 +492,22 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPingRoute: ApiPingRoute,
   ApiRegisterRoute: ApiRegisterRoute,
   ApiSetupRoute: ApiSetupRoute,
-  ApiUploadRoute: ApiUploadRoute,
+  ApiUploadRoute: ApiUploadRouteWithChildren,
   ApiVersionRoute: ApiVersionRoute,
+  ApiAssetsIdRoute: ApiAssetsIdRoute,
+  ApiAuthLoginRoute: ApiAuthLoginRoute,
+  ApiAuthLogoutRoute: ApiAuthLogoutRoute,
+  ApiAuthMeRoute: ApiAuthMeRoute,
+  ApiCaptionsIdRoute: ApiCaptionsIdRoute,
+  ApiCommentsIdRoute: ApiCommentsIdRoute,
   ApiImageIdRoute: ApiImageIdRoute,
+  ApiLikesIdRoute: ApiLikesIdRoute,
   ApiMediaIdRoute: ApiMediaIdRoute,
+  ApiPosterIdRoute: ApiPosterIdRoute,
+  ApiStoryboardVttIdRoute: ApiStoryboardVttIdRoute,
+  ApiStoryboardIdRoute: ApiStoryboardIdRoute,
+  ApiViewIdRoute: ApiViewIdRoute,
+  ApiAuthCallbackProviderRoute: ApiAuthCallbackProviderRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

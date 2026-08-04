@@ -1,0 +1,1 @@
+ALTER TABLE `uploads` ADD `social_enabled` integer DEFAULT true NOT NULL;
