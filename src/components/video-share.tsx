@@ -198,7 +198,7 @@ export function VideoShare({
           <div className="flex flex-col lg:flex-row lg:gap-6">
             {/* Video */}
             <div
-              className="w-full overflow-hidden rounded-none bg-black lg:flex-1 lg:rounded-2xl"
+              className="w-full overflow-hidden rounded-none bg-neutral-100 ring-1 ring-neutral-200 lg:flex-1 lg:rounded-2xl"
               style={{ maxHeight: "calc(100vh - 56px - 240px)" }}
             >
               <VideoPlayer

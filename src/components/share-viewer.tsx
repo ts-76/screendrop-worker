@@ -88,7 +88,7 @@ export function ShareViewer({
           <div className="flex flex-col lg:flex-row lg:gap-6">
             {/* Image */}
             <div
-              className="w-full overflow-hidden rounded-none bg-black lg:flex-1 lg:rounded-2xl"
+              className="w-full overflow-hidden rounded-none bg-neutral-100 ring-1 ring-neutral-200 lg:flex-1 lg:rounded-2xl"
               style={{
                 aspectRatio:
                   upload.width && upload.height
