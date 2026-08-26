@@ -4,7 +4,7 @@ The cloud backend for [Screendrop](https://github.com/fayazara/screendrop), an o
 
 Built with [TanStack Start](https://tanstack.com/start/latest) on [Cloudflare Workers](https://developers.cloudflare.com/workers/), with [Kumo](https://kumo-ui.com/) for the UI, [Video.js v10](https://videojs.org/) for the player, [R2](https://developers.cloudflare.com/r2/) for file storage, and [D1](https://developers.cloudflare.com/d1/) for metadata.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fayazara/screendrop-worker)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ts-76/screendrop-worker)
 
 ## How it works
 
