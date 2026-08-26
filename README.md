@@ -274,7 +274,7 @@ curl -X POST https://your-worker.workers.dev/api/assets/a1b2c3d4 \
 
 ### Secrets
 
-Set via `wrangler secret put`, or prompted automatically during the Deploy to Cloudflare flow (defined in `.dev.vars.example`):
+`UPLOAD_TOKEN`, `AUTHOR_NAME`, and `AUTHOR_AVATAR` are prompted during the Deploy to Cloudflare flow (defined in `.dev.vars.example`). OAuth credentials are intentionally configured after deployment with `wrangler secret put`, because Cloudflare's deploy form treats listed fields as required even when their descriptions say “Optional”:
 
 | Secret          | Description                                                         | Required |
 | --------------- | ------------------------------------------------------------------- | -------- |
