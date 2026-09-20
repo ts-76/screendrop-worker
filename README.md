@@ -285,6 +285,50 @@ Set via `wrangler secret put`, or prompted automatically during the Deploy to Cl
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth client credentials — enables "Sign in with Google" for comments | No |
 | `AUTH_SECRET`   | Overrides the session-cookie signing key (defaults to `UPLOAD_TOKEN`) | No     |
 
+### Read-only MCP endpoint
+
+The Worker also exposes a stateless, read-only MCP endpoint at `/mcp`. It is
+served by the same Worker as the public sharing and upload routes, so both the
+`workers.dev` URL and a configured Custom Domain can be used. Only the exact
+`/mcp` path is handled by MCP; all other paths keep their normal application
+behavior.
+
+Protect only the `/mcp` path with a Cloudflare Access self-hosted application
+and enable Managed OAuth. Configure the Access application as
+`https://<your-worker>/mcp` (or the equivalent `workers.dev/mcp` path), not as
+the whole hostname. Do not put the public share pages, media routes, or upload
+API behind this Access application. The Worker validates the
+`Cf-Access-Jwt-Assertion` signature,
+issuer, audience, expiry, and subject before it invokes any MCP handler. The
+Access values are deployment configuration, not source-code constants:
+
+| Variable | Description | Required |
+| -------- | ----------- | -------- |
+| `MCP_ACCESS_TEAM_DOMAIN` | Issuer URL, for example `https://<your-team>.cloudflareaccess.com` | Yes |
+| `MCP_ACCESS_AUDIENCE` | Access application AUD tag for the MCP application | Yes |
+| `MCP_ACCESS_ISSUER` | Optional explicit issuer override; otherwise the team domain is used | No |
+| `MCP_ACCESS_JWKS_URL` | Optional explicit Access certs URL; otherwise `<issuer>/cdn-cgi/access/certs` is used | No |
+
+Set the variables in your deployment environment, Cloudflare dashboard, or
+local `.dev.vars`; they are intentionally not listed as empty `vars` entries
+in `wrangler.jsonc`, so an empty config value cannot overwrite a real setting.
+Do not commit real tenant identifiers or tokens. This project sets
+`keep_vars: true`, so a deploy does not erase values already configured in the
+dashboard. The configured
+`MCP_RATE_LIMIT` binding applies a per-subject limit before tool execution.
+
+The available tools are read-only:
+
+- `search_captures` — bounded metadata search with pagination
+- `get_capture` — metadata and available sidecars
+- `get_image` — bounded original or poster image content
+- `get_transcript` — transcript JSON sidecar
+- `get_download_link` — public media URL for an existing capture
+
+The endpoint does not expose upload, delete, comment, like, or settings
+operations. After configuring Access, connect an MCP client to
+`https://<your-worker>/mcp` (or the equivalent `workers.dev` URL).
+
 ### Comment sign-in (required OAuth)
 
 Comments and likes always require a signed-in viewer — there is no anonymous/guest path. Configure GitHub and/or Google OAuth to turn the features on; without at least one provider configured, the comment box and like button simply don't appear on share pages, since there'd be no way to sign in. Comments carry the signed-in account's name and avatar.

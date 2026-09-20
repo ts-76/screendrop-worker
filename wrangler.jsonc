@@ -5,9 +5,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "screendrop-worker",
-  "main": "@tanstack/react-start/server-entry",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-07-17",
   "compatibility_flags": ["nodejs_compat"],
+  "keep_vars": true,
   "observability": {
     "enabled": true
   },
@@ -22,5 +23,15 @@
     {
       "binding": "BUCKET"
     }
-  ]
+  ],
+  "ratelimits": [
+    {
+      "name": "MCP_RATE_LIMIT",
+      "namespace_id": "1001",
+      "simple": { "limit": 60, "period": 60 }
+    }
+  ],
+  "secrets": {
+    "required": ["UPLOAD_TOKEN"]
+  }
 }
