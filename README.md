@@ -41,6 +41,47 @@ The smoothest path is to start from the Screendrop app:
 idempotently on `/api/setup` and self-heals on the first upload), so there is no manual
 migration step after a one-click deploy. `Verify Connection` calls `/api/setup` for you.
 
+### Cloudflare hardening settings
+
+The worker keeps public share/media reads cacheable for a short, configurable period,
+while protected mutations and application pages remain private. The default
+`wrangler.jsonc` values are deliberately conservative:
+
+| Setting                  | Purpose                                                              |
+| ------------------------ | -------------------------------------------------------------------- |
+| `R2_DAILY_READ_LIMIT`    | Maximum R2 reads reserved by the global Durable Object per UTC day   |
+| `R2_MONTHLY_READ_LIMIT`  | Maximum R2 reads reserved per UTC month                              |
+| `CACHE_TTL_SECONDS`      | Shared Cache API TTL for validated public media                      |
+| `RATE_LIMIT`             | Cloudflare Worker Rate Limiting binding for public GET/HEAD requests |
+| `RATE_LIMIT_RETRY_AFTER` | Retry-After value for the public request limiter                     |
+| `R2_BUDGET_RETRY_AFTER`  | Retry-After value when the R2 budget is exhausted                    |
+
+The `R2Budget` Durable Object migration is declared in `wrangler.jsonc` and is applied
+by `wrangler deploy` (migration tag `r2-budget-v1`). It fails closed when its limits
+are missing or invalid. Set `UPLOAD_TOKEN` as a secret with
+`wrangler secret put UPLOAD_TOKEN`; do not put tokens or account-specific IDs in the
+repository. The worker also runs on a `workers.dev` URL without requiring a custom
+domain.
+
+The Wrangler Workers Caching section is intentionally disabled. Public media uses only
+the Worker-internal Cache API, so every request still reaches the Worker boundary for
+bot filtering, IP rate limiting, D1 deletion checks, and the R2 budget guard. Public
+media responses use `Cache-Control: public, max-age=0, s-maxage=<TTL>,
+must-revalidate`: browsers revalidate on every request while the Worker Cache API can
+reuse the body for the configured shared TTL. Do not add a Workers-level cache rule
+in front of this Worker unless it preserves those controls.
+
+Cache API storage is best-effort. Cloudflare documents functional Cache API operations
+for custom-domain Workers; on `workers.dev`, Access-fronted deployments, or local
+preview they may be unavailable. The Worker still serves the request safely in those
+cases, with the R2 budget guard applying to the fallback read.
+
+Do not enable an R2 public development URL or an R2 custom domain for the bucket used
+by this worker. Those direct URLs bypass the Worker’s authentication, bot controls,
+rate limit, cache policy, and R2 budget guard. Use the Worker URL for every share and
+media link. The User-Agent bot deny list is only a supplemental signal; it is not a
+replacement for Cloudflare WAF/Bot Management and edge rate-limiting rules.
+
 ## Updating your worker
 
 When you deploy with the button, Cloudflare **clones** this repo into your own
@@ -93,7 +134,7 @@ saved above:
   "compatibility_date": "2026-07-17",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "upload_source_maps": true,
   "d1_databases": [
@@ -101,16 +142,16 @@ saved above:
       "binding": "DB",
       "database_id": "<YOUR_EXISTING_DATABASE_ID>",
       "database_name": "<YOUR_EXISTING_DATABASE_NAME>",
-      "migrations_dir": "drizzle"
-    }
+      "migrations_dir": "drizzle",
+    },
   ],
   "r2_buckets": [
     {
       "binding": "BUCKET",
       "bucket_name": "<YOUR_EXISTING_BUCKET_NAME>",
-      "preview_bucket_name": "<YOUR_EXISTING_PREVIEW_BUCKET_NAME>"
-    }
-  ]
+      "preview_bucket_name": "<YOUR_EXISTING_PREVIEW_BUCKET_NAME>",
+    },
+  ],
 }
 ```
 
@@ -180,35 +221,35 @@ pnpm run deploy
 
 All API routes are CORS-enabled. Routes marked with a lock require a Bearer token (`UPLOAD_TOKEN`).
 
-| Method   | Route                     | Auth   | Description                                                        |
-| -------- | ------------------------- | ------ | ------------------------------------------------------------------ |
-| `GET`    | `/api/version`            | Public | Returns the deployed worker version                                |
-| `POST`   | `/api/setup`              | Bearer | Idempotently provision the D1 schema                               |
-| `GET`    | `/api/ping`               | Bearer | Connection health check (returns `version`)                        |
-| `POST`   | `/api/upload`             | Bearer | Multipart file upload                                              |
-| `PUT`    | `/api/upload`             | Bearer | Streaming upload (raw bytes, metadata via headers)                 |
-| `POST`   | `/api/register`           | Bearer | Register metadata for a file already uploaded to R2                |
-| `POST`   | `/api/assets/:id`         | Bearer | Attach sidecars to an upload: poster, transcript, storyboard, title |
-| `DELETE` | `/api/upload/:id`         | Bearer | Delete an upload permanently: R2 files, comments, likes, view events |
-| `GET`    | `/api/media/:id`          | Public | Serve raw file from R2 (Range requests supported)                  |
-| `GET`    | `/api/image/:id`          | Public | Serve a screenshot from R2                                         |
-| `GET`    | `/api/poster/:id`         | Public | Poster frame for a recording                                       |
-| `GET`    | `/api/captions/:id`       | Public | Captions as WebVTT, generated from the stored transcript           |
-| `GET`    | `/api/storyboard/:id`     | Public | Scrub-preview sprite sheet                                         |
-| `GET`    | `/api/storyboard-vtt/:id` | Public | Thumbnails WebVTT pointing at sprite tiles                         |
-| `GET`    | `/api/comments/:id`       | Public | List comments for an upload (403 if the upload has comments off)   |
-| `POST`   | `/api/comments/:id`       | Public | Post a comment — requires a signed-in session (401 otherwise)      |
-| `PATCH`  | `/api/comments/:id`       | Public | Edit a comment (author only, signed in)                            |
-| `DELETE` | `/api/comments/:id`       | Public | Delete a comment (author only, signed in)                          |
-| `GET`    | `/api/likes/:id`          | Public | Like count, and whether the signed-in viewer already liked          |
-| `POST`   | `/api/likes/:id`          | Public | Like an upload — requires a signed-in session (401 otherwise)      |
-| `DELETE` | `/api/likes/:id`          | Public | Unlike an upload (signed in)                                       |
-| `GET`    | `/api/auth/me`            | Public | Session probe: configured providers + signed-in user               |
-| `GET`    | `/api/auth/login`         | Public | Start OAuth sign-in (`?provider=github\|google&redirect=/:id`)     |
-| `GET`    | `/api/auth/callback/:provider` | Public | OAuth callback (register this URL on your OAuth app)          |
-| `POST`   | `/api/auth/logout`        | Public | Clear the session cookie                                           |
-| `POST`   | `/api/view/:id`           | Public | Increment the view counter (client-deduplicated)                   |
-| `GET`    | `/:id`                    | Public | Share page (recordings) or viewer page (screenshots) with OG tags  |
+| Method   | Route                          | Auth   | Description                                                          |
+| -------- | ------------------------------ | ------ | -------------------------------------------------------------------- |
+| `GET`    | `/api/version`                 | Public | Returns the deployed worker version                                  |
+| `POST`   | `/api/setup`                   | Bearer | Idempotently provision the D1 schema                                 |
+| `GET`    | `/api/ping`                    | Bearer | Connection health check (returns `version`)                          |
+| `POST`   | `/api/upload`                  | Bearer | Multipart file upload                                                |
+| `PUT`    | `/api/upload`                  | Bearer | Streaming upload (raw bytes, metadata via headers)                   |
+| `POST`   | `/api/register`                | Bearer | Register metadata for a file already uploaded to R2                  |
+| `POST`   | `/api/assets/:id`              | Bearer | Attach sidecars to an upload: poster, transcript, storyboard, title  |
+| `DELETE` | `/api/upload/:id`              | Bearer | Delete an upload permanently: R2 files, comments, likes, view events |
+| `GET`    | `/api/media/:id`               | Public | Serve raw file from R2 (Range requests supported)                    |
+| `GET`    | `/api/image/:id`               | Public | Serve a screenshot from R2                                           |
+| `GET`    | `/api/poster/:id`              | Public | Poster frame for a recording                                         |
+| `GET`    | `/api/captions/:id`            | Public | Captions as WebVTT, generated from the stored transcript             |
+| `GET`    | `/api/storyboard/:id`          | Public | Scrub-preview sprite sheet                                           |
+| `GET`    | `/api/storyboard-vtt/:id`      | Public | Thumbnails WebVTT pointing at sprite tiles                           |
+| `GET`    | `/api/comments/:id`            | Public | List comments for an upload (403 if the upload has comments off)     |
+| `POST`   | `/api/comments/:id`            | Public | Post a comment — requires a signed-in session (401 otherwise)        |
+| `PATCH`  | `/api/comments/:id`            | Public | Edit a comment (author only, signed in)                              |
+| `DELETE` | `/api/comments/:id`            | Public | Delete a comment (author only, signed in)                            |
+| `GET`    | `/api/likes/:id`               | Public | Like count, and whether the signed-in viewer already liked           |
+| `POST`   | `/api/likes/:id`               | Public | Like an upload — requires a signed-in session (401 otherwise)        |
+| `DELETE` | `/api/likes/:id`               | Public | Unlike an upload (signed in)                                         |
+| `GET`    | `/api/auth/me`                 | Public | Session probe: configured providers + signed-in user                 |
+| `GET`    | `/api/auth/login`              | Public | Start OAuth sign-in (`?provider=github\|google&redirect=/:id`)       |
+| `GET`    | `/api/auth/callback/:provider` | Public | OAuth callback (register this URL on your OAuth app)                 |
+| `POST`   | `/api/auth/logout`             | Public | Clear the session cookie                                             |
+| `POST`   | `/api/view/:id`                | Public | Increment the view counter (client-deduplicated)                     |
+| `GET`    | `/:id`                         | Public | Share page (recordings) or viewer page (screenshots) with OG tags    |
 
 ### Upload (multipart)
 
@@ -276,14 +317,14 @@ curl -X POST https://your-worker.workers.dev/api/assets/a1b2c3d4 \
 
 `UPLOAD_TOKEN`, `AUTHOR_NAME`, and `AUTHOR_AVATAR` are prompted during the Deploy to Cloudflare flow (defined in `.dev.vars.example`). OAuth credentials are intentionally configured after deployment with `wrangler secret put`, because Cloudflare's deploy form treats listed fields as required even when their descriptions say “Optional”:
 
-| Secret          | Description                                                         | Required |
-| --------------- | ------------------------------------------------------------------- | -------- |
-| `UPLOAD_TOKEN`  | Shared token for authenticating uploads (generated by the Screendrop app) | Yes      |
-| `AUTHOR_NAME`   | Display name shown on shared pages (falls back to `Anonymous`)      | No       |
-| `AUTHOR_AVATAR` | Avatar URL shown on shared pages (falls back to a generated avatar) | No       |
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth app credentials — enables "Sign in with GitHub" for comments | No |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth client credentials — enables "Sign in with Google" for comments | No |
-| `AUTH_SECRET`   | Overrides the session-cookie signing key (defaults to `UPLOAD_TOKEN`) | No     |
+| Secret                                      | Description                                                                  | Required |
+| ------------------------------------------- | ---------------------------------------------------------------------------- | -------- |
+| `UPLOAD_TOKEN`                              | Shared token for authenticating uploads (generated by the Screendrop app)    | Yes      |
+| `AUTHOR_NAME`                               | Display name shown on shared pages (falls back to `Anonymous`)               | No       |
+| `AUTHOR_AVATAR`                             | Avatar URL shown on shared pages (falls back to a generated avatar)          | No       |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth app credentials — enables "Sign in with GitHub" for comments    | No       |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth client credentials — enables "Sign in with Google" for comments | No       |
+| `AUTH_SECRET`                               | Overrides the session-cookie signing key (defaults to `UPLOAD_TOKEN`)        | No       |
 
 ### Read-only MCP endpoint
 
