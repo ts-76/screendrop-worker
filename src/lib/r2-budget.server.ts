@@ -1,42 +1,45 @@
-import { env } from "cloudflare:workers";
+import { env } from "cloudflare:workers"
+import type { BudgetReservation } from "@/durable-objects/r2-budget"
 
 export class R2BudgetExceededError extends Error {
   constructor(readonly retryAfter: number) {
-    super("R2 read budget exhausted");
+    super("R2 read budget exhausted")
   }
 }
 
 export class R2BudgetUnavailableError extends Error {
   constructor() {
-    super("R2 read budget unavailable");
+    super("R2 read budget unavailable")
   }
 }
 
+function configuredRetryAfter(): number | null {
+  const retryAfter = Number(env.R2_BUDGET_RETRY_AFTER)
+  return Number.isSafeInteger(retryAfter) && retryAfter > 0 ? retryAfter : null
+}
+
 async function reserve(): Promise<void> {
-  const namespace = Reflect.get(env, "R2_BUDGET") as
-    DurableObjectNamespace | undefined;
-  if (!namespace) throw new R2BudgetUnavailableError();
-  const id = namespace.idFromName("global");
-  const response = await namespace.get(id).fetch("https://r2-budget/reserve", {
-    method: "POST",
-    body: JSON.stringify({ units: 1 }),
-    headers: { "content-type": "application/json" },
-  });
-  if (response.status === 429) {
-    const retryAfter = Number(response.headers.get("retry-after"));
-    if (!Number.isSafeInteger(retryAfter) || retryAfter <= 0)
-      throw new R2BudgetUnavailableError();
-    throw new R2BudgetExceededError(retryAfter);
+  let result: BudgetReservation
+  try {
+    // One stable name intentionally maps every request to the global budget.
+    result = await env.R2_BUDGET.getByName("global").reserve(1)
+  } catch {
+    throw new R2BudgetUnavailableError()
   }
-  if (!response.ok) throw new R2BudgetUnavailableError();
-  const body: { allowed?: boolean } = await response.json();
-  if (body.allowed !== true) throw new R2BudgetUnavailableError();
+
+  if (result.allowed) return
+  if (result.reason !== "budget_exhausted")
+    throw new R2BudgetUnavailableError()
+
+  const retryAfter = configuredRetryAfter()
+  if (!retryAfter) throw new R2BudgetUnavailableError()
+  throw new R2BudgetExceededError(retryAfter)
 }
 
 export async function guardedR2Get(
   key: string,
   options?: R2GetOptions,
 ): Promise<R2ObjectBody | null> {
-  await reserve();
-  return env.BUCKET.get(key, options);
+  await reserve()
+  return env.BUCKET.get(key, options)
 }

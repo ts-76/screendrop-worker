@@ -123,37 +123,23 @@ git merge --allow-unrelated-histories --strategy=ours --no-commit upstream/main
 git restore --source=upstream/main --staged --worktree .
 ```
 
-The upstream tree uses `wrangler.jsonc`. Update it with the resource values you
-saved above:
+The upstream tree uses the current `wrangler.jsonc` as its source of truth. Do
+not replace it with a hand-written or older config snippet: that can silently
+discard the Worker entrypoint, `R2Budget` migration, both rate-limit bindings,
+hardening variables, `keep_vars`, or observability sampling. Starting from the
+upstream file, carry over only the deployment-specific values you saved above:
 
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "<YOUR_EXISTING_WORKER_NAME>",
-  "main": "@tanstack/react-start/server-entry",
-  "compatibility_date": "2026-07-17",
-  "compatibility_flags": ["nodejs_compat"],
-  "observability": {
-    "enabled": true,
-  },
-  "upload_source_maps": true,
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_id": "<YOUR_EXISTING_DATABASE_ID>",
-      "database_name": "<YOUR_EXISTING_DATABASE_NAME>",
-      "migrations_dir": "drizzle",
-    },
-  ],
-  "r2_buckets": [
-    {
-      "binding": "BUCKET",
-      "bucket_name": "<YOUR_EXISTING_BUCKET_NAME>",
-      "preview_bucket_name": "<YOUR_EXISTING_PREVIEW_BUCKET_NAME>",
-    },
-  ],
-}
-```
+- Keep the clone's existing Worker `name`.
+- Keep the existing D1 `database_id` and `database_name`.
+- Keep the existing R2 `bucket_name` and `preview_bucket_name`, if present.
+- Keep any other environment-specific resource IDs already used by the clone.
+
+Review the resulting `wrangler.jsonc` diff before committing. The current file
+should retain `main: "src/worker.ts"`, the `R2_BUDGET` Durable Object and
+`r2-budget-v1` migration, `RATE_LIMIT` namespace `1001`, `MCP_RATE_LIMIT`
+namespace `1002`, the R2/cache budget variables, `keep_vars: true`, and
+observability sampling. Existing resource IDs must win over blank or
+auto-provisioning values from the upstream template.
 
 Validate, commit, and deploy the update:
 
@@ -350,9 +336,20 @@ Access values are deployment configuration, not source-code constants:
 | `MCP_ACCESS_ISSUER` | Optional explicit issuer override; otherwise the team domain is used | No |
 | `MCP_ACCESS_JWKS_URL` | Optional explicit Access certs URL; otherwise `<issuer>/cdn-cgi/access/certs` is used | No |
 
-Set the variables in your deployment environment, Cloudflare dashboard, or
-local `.dev.vars`; they are intentionally not listed as empty `vars` entries
-in `wrangler.jsonc`, so an empty config value cannot overwrite a real setting.
+MCP is opt-in and does not block the default Deploy to Cloudflare flow. Set the
+variables only when enabling the endpoint, using Worker variables in the
+Cloudflare dashboard (or your deployment environment) for a deployed Worker.
+For local MCP testing, add them to your uncommitted `.dev.vars` file yourself;
+they are intentionally absent from `.dev.vars.example`:
+
+```dotenv
+MCP_ACCESS_TEAM_DOMAIN=https://<your-team>.cloudflareaccess.com
+MCP_ACCESS_AUDIENCE=<your-access-application-aud-tag>
+# Optional overrides:
+# MCP_ACCESS_ISSUER=https://<your-team>.cloudflareaccess.com
+# MCP_ACCESS_JWKS_URL=https://<your-team>.cloudflareaccess.com/cdn-cgi/access/certs
+```
+
 Do not commit real tenant identifiers or tokens. This project sets
 `keep_vars: true`, so a deploy does not erase values already configured in the
 dashboard. The configured
@@ -395,12 +392,15 @@ For local development, add the same names to your uncommitted `.dev.vars` file. 
 
 Configure one provider or both — only configured providers show up as sign-in buttons. Removing both secrets turns off comments and likes entirely (no anonymous fallback).
 
-### Bindings (auto-provisioned)
+### Bindings and protections
 
-| Type | Binding  | Purpose                                     |
-| ---- | -------- | ------------------------------------------- |
-| R2   | `BUCKET` | File storage for screenshots and recordings |
-| D1   | `DB`     | SQLite database for upload metadata         |
+| Type           | Binding          | Purpose                                                     |
+| -------------- | ---------------- | ----------------------------------------------------------- |
+| R2             | `BUCKET`         | File storage for screenshots and recordings                 |
+| D1             | `DB`             | SQLite database for upload metadata                         |
+| Durable Object | `R2_BUDGET`      | Global daily/monthly R2 read budget                        |
+| Rate Limit     | `RATE_LIMIT`     | Public GET/HEAD limiter (namespace `1001`)                 |
+| Rate Limit     | `MCP_RATE_LIMIT` | Per-subject MCP limiter (namespace `1002`)                 |
 
 ## Development
 

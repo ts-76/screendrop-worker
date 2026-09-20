@@ -16,6 +16,7 @@ test("the Worker boundary denies AI crawlers, publishes robots policy, and rate-
   assert.match(worker, /x-robots-tag/);
   assert.match(worker, /isPublicRead/);
   assert.match(worker, /request\.method !== "GET"/);
+  assert.match(worker, /url\.pathname === "\/mcp"/);
   assert.match(
     worker,
     /serverEntry\.fetch\(request, \{ context: \{ env, ctx \} \}\)/,
@@ -27,11 +28,17 @@ test("the Worker boundary denies AI crawlers, publishes robots policy, and rate-
       worker.indexOf("env.RATE_LIMIT.limit"),
     "mutation handlers must not enter the public-read limiter",
   );
+  assert.ok(
+    worker.indexOf('url.pathname === "/mcp"') <
+      worker.indexOf("AI_CRAWLER_PATTERN.test"),
+    "MCP must be routed before crawler denial",
+  );
 });
 
 test("R2 reads are guarded and public responses use bounded cache TTLs", async () => {
   const media = await source("src/lib/media-response.server.ts");
   const budget = await source("src/lib/r2-budget.server.ts");
+  const mcp = await source("src/mcp.server.ts");
   const config = await source("wrangler.jsonc");
   assert.match(media, /guardedR2Get/);
   assert.match(media, /caches as unknown as \{ default: Cache \}/);
@@ -47,7 +54,9 @@ test("R2 reads are guarded and public responses use bounded cache TTLs", async (
   assert.match(budget, /R2_BUDGET/);
   assert.match(budget, /R2BudgetExceededError/);
   assert.match(budget, /R2BudgetUnavailableError/);
-  assert.match(budget, /!response\.ok/);
+  assert.match(budget, /result\.allowed/);
+  assert.match(mcp, /guardedR2Get/);
+  assert.doesNotMatch(mcp, /context\.env\.BUCKET\.get/);
   const durableObject = await source("src/durable-objects/r2-budget.ts");
   assert.match(durableObject, /storage\.transaction\(async \(txn\)/);
   assert.match(durableObject, /txn\.get/);
@@ -78,6 +87,15 @@ test("public media routes expose HEAD and preserve safe range behavior", async (
   const media = await source("src/lib/media-response.server.ts");
   assert.match(media, /status: 206/);
   assert.match(media, /content-range/);
+});
+
+test("the default vars example keeps optional auth and MCP opt-in empty", async () => {
+  const vars = await source(".dev.vars.example");
+  assert.doesNotMatch(vars, /(?:GITHUB|GOOGLE)_CLIENT_(?:ID|SECRET)/);
+  assert.doesNotMatch(
+    vars,
+    /MCP_ACCESS_(?:TEAM_DOMAIN|ISSUER|JWKS_URL|AUDIENCE)/,
+  );
 });
 
 test("all public media route handlers pass the request to cache-aware serving", async () => {

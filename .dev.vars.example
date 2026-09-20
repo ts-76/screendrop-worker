@@ -4,11 +4,3 @@
 UPLOAD_TOKEN=
 AUTHOR_NAME=Your Name
 AUTHOR_AVATAR=https://github.com/your-username.png
-
-# Cloudflare Access Managed OAuth for the read-only MCP endpoint. Use the
-# Access team issuer URL (including https://) and the MCP application's AUD
-# tag. The JWKS URL is derived from the issuer unless explicitly provided.
-MCP_ACCESS_TEAM_DOMAIN=https://<your-team>.cloudflareaccess.com
-MCP_ACCESS_ISSUER=
-MCP_ACCESS_JWKS_URL=
-MCP_ACCESS_AUDIENCE=
