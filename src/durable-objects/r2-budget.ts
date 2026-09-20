@@ -1,82 +1,63 @@
-interface BudgetRequest {
-  units?: number;
-}
+import { DurableObject } from "cloudflare:workers"
 
 interface BudgetState {
-  day: string;
-  month: string;
-  dayUsed: number;
-  monthUsed: number;
+  day: string
+  month: string
+  dayUsed: number
+  monthUsed: number
 }
 
+export type BudgetReservation =
+  | {
+      allowed: true
+      dayUsed: number
+      monthUsed: number
+    }
+  | {
+      allowed: false
+      reason:
+        | "budget_unconfigured"
+        | "invalid_units"
+        | "budget_exhausted"
+        | "budget_unavailable"
+      dayUsed?: number
+      monthUsed?: number
+    }
+
 function limit(value: unknown): number | null {
-  if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  if (typeof value !== "string" || !/^\d+$/.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 }
 
 function utcKeys(now = new Date()): { day: string; month: string } {
-  const day = now.toISOString().slice(0, 10);
-  return { day, month: day.slice(0, 7) };
+  const day = now.toISOString().slice(0, 10)
+  return { day, month: day.slice(0, 7) }
 }
 
-export default class R2Budget implements DurableObject {
-  private readonly state: DurableObjectState;
-  private readonly env: {
-    R2_DAILY_READ_LIMIT?: string;
-    R2_MONTHLY_READ_LIMIT?: string;
-    R2_BUDGET_RETRY_AFTER?: string;
-  };
+/**
+ * A single, named object intentionally owns the global monthly read budget.
+ * Its public reserve method is invoked through Durable Object RPC so callers
+ * cannot bypass the serialized storage transaction with a forged request.
+ */
+export class R2Budget extends DurableObject<Env> {
+  async reserve(units = 1): Promise<BudgetReservation> {
+    const dailyLimit = limit(this.env.R2_DAILY_READ_LIMIT)
+    const monthlyLimit = limit(this.env.R2_MONTHLY_READ_LIMIT)
+    if (!dailyLimit || !monthlyLimit)
+      return { allowed: false, reason: "budget_unconfigured" }
 
-  constructor(
-    state: DurableObjectState,
-    env: {
-      R2_DAILY_READ_LIMIT?: string;
-      R2_MONTHLY_READ_LIMIT?: string;
-      R2_BUDGET_RETRY_AFTER?: string;
-    },
-  ) {
-    this.state = state;
-    this.env = env;
-  }
-
-  async fetch(request: Request): Promise<Response> {
-    if (request.method !== "POST")
-      return new Response("Method Not Allowed", { status: 405 });
-
-    const dailyLimit = limit(this.env.R2_DAILY_READ_LIMIT);
-    const monthlyLimit = limit(this.env.R2_MONTHLY_READ_LIMIT);
-    const retryAfter = limit(this.env.R2_BUDGET_RETRY_AFTER);
-    if (!dailyLimit || !monthlyLimit || !retryAfter)
-      return Response.json(
-        { allowed: false, reason: "budget_unconfigured" },
-        { status: 503 },
-      );
-
-    let body: BudgetRequest;
-    try {
-      body = await request.json();
-    } catch {
-      return Response.json(
-        { allowed: false, reason: "invalid_request" },
-        { status: 400 },
-      );
-    }
-    const units = body.units ?? 1;
     if (!Number.isSafeInteger(units) || units < 1 || units > 100)
-      return Response.json(
-        { allowed: false, reason: "invalid_units" },
-        { status: 400 },
-      );
+      return { allowed: false, reason: "invalid_units" }
 
     try {
-      const result = await this.state.storage.transaction(async (txn) => {
-        const keys = utcKeys();
+      return await this.ctx.storage.transaction(async (txn) => {
+        const keys = utcKeys()
         const current = (await txn.get<BudgetState>("state")) ?? {
           ...keys,
           dayUsed: 0,
           monthUsed: 0,
-        };
+        }
         const state: BudgetState =
           current.day === keys.day && current.month === keys.month
             ? current
@@ -84,49 +65,37 @@ export default class R2Budget implements DurableObject {
                 ...keys,
                 dayUsed: current.day === keys.day ? current.dayUsed : 0,
                 monthUsed: current.month === keys.month ? current.monthUsed : 0,
-              };
+              }
+
         if (
           state.dayUsed + units > dailyLimit ||
           state.monthUsed + units > monthlyLimit
         ) {
           // Persist a period reset, if one occurred, while keeping the failed
           // reservation out of both counters.
-          await txn.put("state", state);
+          await txn.put("state", state)
           return {
             allowed: false as const,
+            reason: "budget_exhausted" as const,
             dayUsed: state.dayUsed,
             monthUsed: state.monthUsed,
-          };
+          }
         }
-        state.dayUsed += units;
-        state.monthUsed += units;
-        await txn.put("state", state);
+
+        state.dayUsed += units
+        state.monthUsed += units
+        await txn.put("state", state)
         return {
           allowed: true as const,
           dayUsed: state.dayUsed,
           monthUsed: state.monthUsed,
-        };
-      });
-      if (!result.allowed)
-        return Response.json(
-          {
-            allowed: false,
-            reason: "budget_exhausted",
-            dayUsed: result.dayUsed,
-            monthUsed: result.monthUsed,
-          },
-          {
-            status: 429,
-            headers: { "retry-after": String(retryAfter) },
-          },
-        );
-      return Response.json(result);
+        }
+      })
     } catch {
       // Storage failures must not fall through to an unguarded R2 read.
-      return Response.json(
-        { allowed: false, reason: "budget_unavailable" },
-        { status: 503 },
-      );
+      return { allowed: false, reason: "budget_unavailable" }
     }
   }
 }
+
+export default R2Budget

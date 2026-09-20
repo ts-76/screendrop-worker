@@ -11,6 +11,10 @@ import {
 import { db } from "@/db"
 import { uploads } from "@/db/schema"
 import { verifyMcpAccessAssertion } from "@/lib/mcp-access.server"
+import {
+  R2BudgetExceededError,
+  guardedR2Get,
+} from "@/lib/r2-budget.server"
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024
 const MAX_TRANSCRIPT_BYTES = 256 * 1024
@@ -48,6 +52,12 @@ function bytesToBase64(bytes: Uint8Array): string {
 function safeId(value: string): string | null {
   const id = value.trim()
   return /^[a-zA-Z0-9_-]{1,128}$/.test(id) ? id : null
+}
+
+function r2ReadError(error: unknown) {
+  return error instanceof R2BudgetExceededError
+    ? errorResult("Media read budget exhausted; try again later")
+    : errorResult("Media is temporarily unavailable")
 }
 
 function createServer(context: McpContext): McpServer {
@@ -183,7 +193,12 @@ function createServer(context: McpContext): McpServer {
         return errorResult("Image not found")
       const key = asset === "poster" ? capture.posterKey : capture.r2Key
       if (!key) return errorResult("Image not found")
-      const object = await context.env.BUCKET.get(key)
+      let object: R2ObjectBody | null
+      try {
+        object = await guardedR2Get(key)
+      } catch (error) {
+        return r2ReadError(error)
+      }
       if (!object) return errorResult("Image not found")
       if (object.size > MAX_IMAGE_BYTES)
         return errorResult("Image exceeds the MCP size limit")
@@ -222,7 +237,12 @@ function createServer(context: McpContext): McpServer {
         where: eq(uploads.id, captureId),
       })
       if (!capture?.transcriptKey) return errorResult("Transcript not found")
-      const object = await context.env.BUCKET.get(capture.transcriptKey)
+      let object: R2ObjectBody | null
+      try {
+        object = await guardedR2Get(capture.transcriptKey)
+      } catch (error) {
+        return r2ReadError(error)
+      }
       if (!object) return errorResult("Transcript not found")
       if (object.size > MAX_TRANSCRIPT_BYTES)
         return errorResult("Transcript exceeds the MCP size limit")
