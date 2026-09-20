@@ -27,7 +27,7 @@
   "ratelimits": [
     {
       "name": "MCP_RATE_LIMIT",
-      "namespace_id": "1001",
+      "namespace_id": "1002",
       "simple": { "limit": 60, "period": 60 }
     }
   ],
