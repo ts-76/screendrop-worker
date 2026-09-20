@@ -5,6 +5,7 @@ import type { Transcript } from "@/lib/transcript";
 import { db } from "@/db";
 import { likes, uploads } from "@/db/schema";
 import { parseTranscript } from "@/lib/transcript";
+import { guardedR2Get } from "@/lib/r2-budget.server";
 
 export const WORKER_VERSION = "1.0.0";
 
@@ -49,7 +50,12 @@ export async function getTranscript(
   upload: Upload,
 ): Promise<Transcript | null> {
   if (!upload.transcriptKey) return null;
-  const object = await env.BUCKET.get(upload.transcriptKey);
+  let object: R2ObjectBody | null;
+  try {
+    object = await guardedR2Get(upload.transcriptKey);
+  } catch {
+    return null;
+  }
   if (!object) return null;
   try {
     return parseTranscript(await object.json());

@@ -10,28 +10,45 @@
   "compatibility_flags": ["nodejs_compat"],
   "keep_vars": true,
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "head_sampling_rate": 0.1,
   },
   "upload_source_maps": true,
+  "secrets": {
+    "required": ["UPLOAD_TOKEN"],
+  },
   "d1_databases": [
     {
       "binding": "DB",
-      "migrations_dir": "drizzle"
-    }
+      "migrations_dir": "drizzle",
+    },
   ],
   "r2_buckets": [
     {
-      "binding": "BUCKET"
-    }
+      "binding": "BUCKET",
+    },
   ],
+  "durable_objects": {
+    "bindings": [{ "name": "R2_BUDGET", "class_name": "R2Budget" }],
+  },
+  "migrations": [{ "tag": "r2-budget-v1", "new_sqlite_classes": ["R2Budget"] }],
   "ratelimits": [
+    {
+      "name": "RATE_LIMIT",
+      "namespace_id": "1001",
+      "simple": { "limit": 120, "period": 60 },
+    },
     {
       "name": "MCP_RATE_LIMIT",
       "namespace_id": "1002",
-      "simple": { "limit": 60, "period": 60 }
-    }
+      "simple": { "limit": 60, "period": 60 },
+    },
   ],
-  "secrets": {
-    "required": ["UPLOAD_TOKEN"]
-  }
+  "vars": {
+    "R2_DAILY_READ_LIMIT": "10000",
+    "R2_MONTHLY_READ_LIMIT": "300000",
+    "CACHE_TTL_SECONDS": "300",
+    "RATE_LIMIT_RETRY_AFTER": "60",
+    "R2_BUDGET_RETRY_AFTER": "60",
+  },
 }
