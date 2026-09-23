@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { env } from "cloudflare:workers"
 import { eq } from "drizzle-orm"
 import { db } from "@/db"
-import { comments, likes, uploads, viewEvents } from "@/db/schema"
+import { collectionUploads, comments, likes, uploadTags, uploads, viewEvents } from "@/db/schema"
 import { json, optionsResponse, protectedApi } from "@/lib/api.server"
 import { ensureSchema, getUploadById } from "@/lib/uploads.server"
 
@@ -36,6 +36,8 @@ export const Route = createFileRoute("/api/upload/$id")({
 
           await db.delete(comments).where(eq(comments.uploadId, upload.id))
           await db.delete(likes).where(eq(likes.uploadId, upload.id))
+          await db.delete(uploadTags).where(eq(uploadTags.uploadId, upload.id))
+          await db.delete(collectionUploads).where(eq(collectionUploads.uploadId, upload.id))
           await db
             .delete(viewEvents)
             .where(eq(viewEvents.uploadId, upload.id))

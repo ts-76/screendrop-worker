@@ -102,6 +102,44 @@ export const viewEvents = sqliteTable(
   (table) => [index("idx_view_events_upload_id").on(table.uploadId)],
 );
 
+export const tags = sqliteTable("tags", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  nameKey: text("name_key").notNull().unique(),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
+export const uploadTags = sqliteTable(
+  "upload_tags",
+  {
+    uploadId: text("upload_id").notNull(),
+    tagId: text("tag_id").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.uploadId, table.tagId] }),
+    index("idx_upload_tags_tag_id").on(table.tagId, table.uploadId),
+  ],
+);
+
+export const collections = sqliteTable("collections", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  nameKey: text("name_key").notNull().unique(),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
+export const collectionUploads = sqliteTable(
+  "collection_uploads",
+  {
+    collectionId: text("collection_id").notNull(),
+    uploadId: text("upload_id").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.collectionId, table.uploadId] }),
+    index("idx_collection_uploads_upload_id").on(table.uploadId, table.collectionId),
+  ],
+);
+
 export type Upload = typeof uploads.$inferSelect;
 export type NewUpload = typeof uploads.$inferInsert;
 export type Comment = typeof comments.$inferSelect;

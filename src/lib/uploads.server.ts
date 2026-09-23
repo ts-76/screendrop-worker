@@ -134,6 +134,25 @@ export async function ensureSchema(): Promise<Array<string>> {
     "CREATE INDEX IF NOT EXISTS idx_view_events_upload_id ON view_events(upload_id)",
   );
 
+  await env.DB.exec(
+    "CREATE TABLE IF NOT EXISTS tags (id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  );
+  await env.DB.exec(
+    "CREATE TABLE IF NOT EXISTS upload_tags (upload_id TEXT NOT NULL, tag_id TEXT NOT NULL, PRIMARY KEY (upload_id, tag_id))",
+  );
+  await env.DB.exec(
+    "CREATE INDEX IF NOT EXISTS idx_upload_tags_tag_id ON upload_tags(tag_id, upload_id)",
+  );
+  await env.DB.exec(
+    "CREATE TABLE IF NOT EXISTS collections (id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  );
+  await env.DB.exec(
+    "CREATE TABLE IF NOT EXISTS collection_uploads (collection_id TEXT NOT NULL, upload_id TEXT NOT NULL, PRIMARY KEY (collection_id, upload_id))",
+  );
+  await env.DB.exec(
+    "CREATE INDEX IF NOT EXISTS idx_collection_uploads_upload_id ON collection_uploads(upload_id, collection_id)",
+  );
+
   return applied;
 }
 

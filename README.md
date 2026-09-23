@@ -37,6 +37,28 @@ The smoothest path is to start from the Screendrop app:
    - Deploy the worker and set up CI/CD via Workers Builds
 3. Back in the app, paste your worker URL (the token is already filled in) and click **Verify Connection**.
 
+### Organize uploaded captures
+
+Open `/library` on your Worker URL (for example,
+`https://your-worker.workers.dev/library`) and sign in with the same
+`UPLOAD_TOKEN` configured in Screendrop Settings → Cloud. The library lists
+captures already uploaded to this Worker, lets you search or filter them, and
+lets you create, rename, and delete tags and collections. Select a capture to
+assign multiple tags or collections. Deleting a tag or collection does **not**
+delete its captures.
+
+The library is private to anyone who knows the upload token. Sign-in exchanges
+the token for a signed, HttpOnly, SameSite=Strict cookie valid for 12 hours;
+the token is not stored in the browser. Sign out when using a shared computer.
+The library's metadata API is not CORS-enabled, and its mutations require a
+same-origin request. The sign-in endpoint has its own rate-limit binding.
+
+The list is read from D1 metadata rather than enumerating R2 objects, so
+browsing and filtering do not themselves incur R2 reads. Thumbnail requests
+still use the existing guarded public media routes and their R2 budget. The
+library does not change the visibility of share links: anyone with a link can
+view its capture under the Worker's existing public-media controls.
+
 **Database schema:** the worker provisions its own D1 schema at runtime (it is created
 idempotently on `/api/setup` and self-heals on the first upload), so there is no manual
 migration step after a one-click deploy. `Verify Connection` calls `/api/setup` for you.
@@ -47,14 +69,15 @@ The worker keeps public share/media reads cacheable for a short, configurable pe
 while protected mutations and application pages remain private. The default
 `wrangler.jsonc` values are deliberately conservative:
 
-| Setting                  | Purpose                                                              |
-| ------------------------ | -------------------------------------------------------------------- |
-| `R2_DAILY_READ_LIMIT`    | Maximum R2 reads reserved by the global Durable Object per UTC day   |
-| `R2_MONTHLY_READ_LIMIT`  | Maximum R2 reads reserved per UTC month                              |
-| `CACHE_TTL_SECONDS`      | Shared Cache API TTL for validated public media                      |
-| `RATE_LIMIT`             | Cloudflare Worker Rate Limiting binding for public GET/HEAD requests |
-| `RATE_LIMIT_RETRY_AFTER` | Retry-After value for the public request limiter                     |
-| `R2_BUDGET_RETRY_AFTER`  | Retry-After value when the R2 budget is exhausted                    |
+| Setting                    | Purpose                                                              |
+| -------------------------- | -------------------------------------------------------------------- |
+| `R2_DAILY_READ_LIMIT`      | Maximum R2 reads reserved by the global Durable Object per UTC day   |
+| `R2_MONTHLY_READ_LIMIT`    | Maximum R2 reads reserved per UTC month                              |
+| `CACHE_TTL_SECONDS`        | Shared Cache API TTL for validated public media                      |
+| `RATE_LIMIT`               | Cloudflare Worker Rate Limiting binding for public GET/HEAD requests |
+| `LIBRARY_LOGIN_RATE_LIMIT` | Rate Limiting binding for library sign-in attempts                   |
+| `RATE_LIMIT_RETRY_AFTER`   | Retry-After value for the public request limiter                     |
+| `R2_BUDGET_RETRY_AFTER`    | Retry-After value when the R2 budget is exhausted                    |
 
 The `R2Budget` Durable Object migration is declared in `wrangler.jsonc` and is applied
 by `wrangler deploy` (migration tag `r2-budget-v1`). It fails closed when its limits
@@ -125,7 +148,7 @@ git restore --source=upstream/main --staged --worktree .
 
 The upstream tree uses the current `wrangler.jsonc` as its source of truth. Do
 not replace it with a hand-written or older config snippet: that can silently
-discard the Worker entrypoint, `R2Budget` migration, both rate-limit bindings,
+discard the Worker entrypoint, `R2Budget` migration, rate-limit bindings,
 hardening variables, `keep_vars`, or observability sampling. Starting from the
 upstream file, carry over only the deployment-specific values you saved above:
 
@@ -137,7 +160,8 @@ upstream file, carry over only the deployment-specific values you saved above:
 Review the resulting `wrangler.jsonc` diff before committing. The current file
 should retain `main: "src/worker.ts"`, the `R2_BUDGET` Durable Object and
 `r2-budget-v1` migration, `RATE_LIMIT` namespace `1001`, `MCP_RATE_LIMIT`
-namespace `1002`, the R2/cache budget variables, `keep_vars: true`, and
+namespace `1002`, `LIBRARY_LOGIN_RATE_LIMIT` namespace `1003`, the R2/cache
+budget variables, `keep_vars: true`, and
 observability sampling. Existing resource IDs must win over blank or
 auto-provisioning values from the upstream template.
 
@@ -205,7 +229,10 @@ pnpm run deploy
 
 ## API
 
-All API routes are CORS-enabled. Routes marked with a lock require a Bearer token (`UPLOAD_TOKEN`).
+The app-facing API routes below are CORS-enabled. Routes marked with a lock
+require a Bearer token (`UPLOAD_TOKEN`). The `/api/library/*` owner endpoints
+are separate: they require the library's same-origin session cookie and are not
+CORS-enabled.
 
 | Method   | Route                          | Auth   | Description                                                          |
 | -------- | ------------------------------ | ------ | -------------------------------------------------------------------- |
@@ -329,12 +356,12 @@ API behind this Access application. The Worker validates the
 issuer, audience, expiry, and subject before it invokes any MCP handler. The
 Access values are deployment configuration, not source-code constants:
 
-| Variable | Description | Required |
-| -------- | ----------- | -------- |
-| `MCP_ACCESS_TEAM_DOMAIN` | Issuer URL, for example `https://<your-team>.cloudflareaccess.com` | Yes |
-| `MCP_ACCESS_AUDIENCE` | Access application AUD tag for the MCP application | Yes |
-| `MCP_ACCESS_ISSUER` | Optional explicit issuer override; otherwise the team domain is used | No |
-| `MCP_ACCESS_JWKS_URL` | Optional explicit Access certs URL; otherwise `<issuer>/cdn-cgi/access/certs` is used | No |
+| Variable                 | Description                                                                           | Required |
+| ------------------------ | ------------------------------------------------------------------------------------- | -------- |
+| `MCP_ACCESS_TEAM_DOMAIN` | Issuer URL, for example `https://<your-team>.cloudflareaccess.com`                    | Yes      |
+| `MCP_ACCESS_AUDIENCE`    | Access application AUD tag for the MCP application                                    | Yes      |
+| `MCP_ACCESS_ISSUER`      | Optional explicit issuer override; otherwise the team domain is used                  | No       |
+| `MCP_ACCESS_JWKS_URL`    | Optional explicit Access certs URL; otherwise `<issuer>/cdn-cgi/access/certs` is used | No       |
 
 MCP is opt-in and does not block the default Deploy to Cloudflare flow. Set the
 variables only when enabling the endpoint, using Worker variables in the
@@ -392,13 +419,13 @@ Configure one provider or both — only configured providers show up as sign-in 
 
 ### Bindings and protections
 
-| Type           | Binding          | Purpose                                                     |
-| -------------- | ---------------- | ----------------------------------------------------------- |
-| R2             | `BUCKET`         | File storage for screenshots and recordings                 |
-| D1             | `DB`             | SQLite database for upload metadata                         |
-| Durable Object | `R2_BUDGET`      | Global daily/monthly R2 read budget                        |
-| Rate Limit     | `RATE_LIMIT`     | Public GET/HEAD limiter (namespace `1001`)                 |
-| Rate Limit     | `MCP_RATE_LIMIT` | Per-subject MCP limiter (namespace `1002`)                 |
+| Type           | Binding          | Purpose                                     |
+| -------------- | ---------------- | ------------------------------------------- |
+| R2             | `BUCKET`         | File storage for screenshots and recordings |
+| D1             | `DB`             | SQLite database for upload metadata         |
+| Durable Object | `R2_BUDGET`      | Global daily/monthly R2 read budget         |
+| Rate Limit     | `RATE_LIMIT`     | Public GET/HEAD limiter (namespace `1001`)  |
+| Rate Limit     | `MCP_RATE_LIMIT` | Per-subject MCP limiter (namespace `1002`)  |
 
 ## Development
 

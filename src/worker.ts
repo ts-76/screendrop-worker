@@ -1,5 +1,6 @@
 import serverEntry from "@tanstack/react-start/server-entry"
 import { handleMcp } from "@/mcp.server"
+import { handleLibraryApi } from "@/lib/library-api.server"
 import R2Budget from "@/durable-objects/r2-budget"
 
 export { R2Budget }
@@ -57,6 +58,9 @@ export default {
     // boundary. Access JWT verification and MCP rate limiting happen inside
     // handleMcp, before any crawler denial or page handling can run.
     if (url.pathname === "/mcp") return handleMcp(request, env, ctx)
+
+    if (url.pathname.startsWith("/api/library/"))
+      return handleLibraryApi(request, env)
 
     const userAgent = request.headers.get("user-agent") || ""
     if (AI_CRAWLER_PATTERN.test(userAgent))

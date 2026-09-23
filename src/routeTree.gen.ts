@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LibraryRouteImport } from './routes/library'
 import { Route as IdRouteImport } from './routes/$id'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiVersionRouteImport } from './routes/api/version'
@@ -32,6 +33,11 @@ import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiAssetsIdRouteImport } from './routes/api/assets.$id'
 import { Route as ApiAuthCallbackProviderRouteImport } from './routes/api/auth/callback.$provider'
 
+const LibraryRoute = LibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IdRoute = IdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -146,6 +152,7 @@ const ApiAuthCallbackProviderRoute = ApiAuthCallbackProviderRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$id': typeof IdRoute
+  '/library': typeof LibraryRoute
   '/api/ping': typeof ApiPingRoute
   '/api/register': typeof ApiRegisterRoute
   '/api/setup': typeof ApiSetupRoute
@@ -170,6 +177,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$id': typeof IdRoute
+  '/library': typeof LibraryRoute
   '/api/ping': typeof ApiPingRoute
   '/api/register': typeof ApiRegisterRoute
   '/api/setup': typeof ApiSetupRoute
@@ -195,6 +203,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$id': typeof IdRoute
+  '/library': typeof LibraryRoute
   '/api/ping': typeof ApiPingRoute
   '/api/register': typeof ApiRegisterRoute
   '/api/setup': typeof ApiSetupRoute
@@ -221,6 +230,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$id'
+    | '/library'
     | '/api/ping'
     | '/api/register'
     | '/api/setup'
@@ -245,6 +255,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$id'
+    | '/library'
     | '/api/ping'
     | '/api/register'
     | '/api/setup'
@@ -269,6 +280,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$id'
+    | '/library'
     | '/api/ping'
     | '/api/register'
     | '/api/setup'
@@ -294,6 +306,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   IdRoute: typeof IdRoute
+  LibraryRoute: typeof LibraryRoute
   ApiPingRoute: typeof ApiPingRoute
   ApiRegisterRoute: typeof ApiRegisterRoute
   ApiSetupRoute: typeof ApiSetupRoute
@@ -317,6 +330,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/library': {
+      id: '/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof LibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/$id': {
       id: '/$id'
       path: '/$id'
@@ -489,6 +509,7 @@ const ApiUploadRouteWithChildren = ApiUploadRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   IdRoute: IdRoute,
+  LibraryRoute: LibraryRoute,
   ApiPingRoute: ApiPingRoute,
   ApiRegisterRoute: ApiRegisterRoute,
   ApiSetupRoute: ApiSetupRoute,

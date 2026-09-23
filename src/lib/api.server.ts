@@ -32,7 +32,7 @@ export function optionsResponse(): Response {
   return withCors(new Response(null, { status: 204 }))
 }
 
-async function securelyEqual(left: string, right: string): Promise<boolean> {
+export async function securelyEqual(left: string, right: string): Promise<boolean> {
   const encoder = new TextEncoder()
   const [leftHash, rightHash] = await Promise.all([
     crypto.subtle.digest("SHA-256", encoder.encode(left)),
