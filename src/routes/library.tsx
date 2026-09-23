@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  ArrowSquareOut,
+  FolderSimple,
+  Images,
+  UploadSimple,
+  X,
+} from "@phosphor-icons/react";
+import {
   LIBRARY_IMAGE_TYPES,
   MAX_LIBRARY_UPLOAD_BYTES,
 } from "@/lib/library-upload-config";
@@ -22,6 +29,7 @@ type Capture = {
 type Metadata = { tags: Array<NamedItem>; collections: Array<NamedItem> };
 type CapturePage = { captures: Array<Capture>; nextCursor: string | null };
 type Kind = "tags" | "collections";
+type MobilePanel = "browse" | "details" | null;
 const IMAGE_TYPES = new Set<string>(LIBRARY_IMAGE_TYPES);
 
 export const Route = createFileRoute("/library")({
@@ -94,8 +102,40 @@ function LibraryPage() {
   const [uploadStatus, setUploadStatus] = useState("");
   const [uploadNotice, setUploadNotice] = useState("");
   const [refreshRevision, setRefreshRevision] = useState(0);
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
+  const [mobileKind, setMobileKind] = useState<Kind>("collections");
+  const [assignmentKind, setAssignmentKind] = useState<Kind>("collections");
+  const [compactLayout, setCompactLayout] = useState(false);
   const captureRequest = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
+  const browseDialog = useRef<HTMLDialogElement>(null);
+  const detailsDialog = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1279px)");
+    const update = () => setCompactLayout(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    const dialogs = [
+      {
+        element: browseDialog.current,
+        open: compactLayout && mobilePanel === "browse",
+      },
+      {
+        element: detailsDialog.current,
+        open: compactLayout && mobilePanel === "details" && selectedId !== null,
+      },
+    ];
+    for (const { element, open } of dialogs) {
+      if (!element) continue;
+      if (open && !element.open) element.showModal();
+      if (!open && element.open) element.close();
+    }
+  }, [compactLayout, mobilePanel, selectedId]);
 
   useEffect(() => {
     let mounted = true;
@@ -468,7 +508,7 @@ function LibraryPage() {
 
   return (
     <main className="min-h-dvh bg-[#f8f8f6] text-neutral-900">
-      <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-5 py-4 md:px-8">
+      <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 sm:px-5 md:px-8 md:py-4">
         <div>
           <a
             href="/"
@@ -476,7 +516,7 @@ function LibraryPage() {
           >
             Screendrop Cloud
           </a>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+          <h1 className="mt-0.5 text-xl font-semibold tracking-tight md:mt-1 md:text-2xl">
             Library
           </h1>
         </div>
@@ -484,14 +524,14 @@ function LibraryPage() {
           type="button"
           disabled={busy}
           onClick={() => void logout()}
-          className="rounded-lg border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 disabled:opacity-50"
+          className="min-h-11 rounded-lg border border-neutral-300 px-3 text-sm hover:bg-neutral-100 disabled:opacity-50 md:px-4"
         >
           Sign out
         </button>
       </header>
 
-      <div className="mx-auto grid max-w-[1600px] gap-6 p-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:p-8">
-        <aside className="space-y-7">
+      <div className="mx-auto grid max-w-[1600px] gap-6 px-3 pb-28 pt-3 sm:px-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:p-8">
+        <aside className="hidden space-y-7 lg:block">
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500">
               Browse
@@ -538,23 +578,23 @@ function LibraryPage() {
         </aside>
 
         <section className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-4">
-            <label className="min-w-[180px] flex-1">
+          <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white p-2 sm:gap-3 sm:p-4">
+            <label className="min-w-0 flex-1">
               <span className="sr-only">Search captures</span>
               <input
                 type="search"
                 placeholder="Search captures…"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                className="min-h-11 w-full rounded-lg border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
               />
             </label>
-            <label>
+            <label className="shrink-0">
               <span className="sr-only">Media type</span>
               <select
                 value={mediaType}
                 onChange={(event) => setMediaType(event.target.value)}
-                className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm"
+                className="min-h-11 max-w-28 rounded-lg border border-neutral-300 bg-white px-2 text-sm sm:max-w-none sm:px-3"
               >
                 <option value="all">All media</option>
                 <option value="image">Images</option>
@@ -575,26 +615,29 @@ function LibraryPage() {
               type="button"
               disabled={busy}
               onClick={() => fileInput.current?.click()}
-              className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+              className="hidden min-h-11 rounded-lg bg-neutral-900 px-4 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50 lg:block"
             >
               Upload images
             </button>
           </div>
-          <p className="mt-2 text-xs text-neutral-500">
+          <p className="mt-2 hidden text-xs text-neutral-500 sm:block">
             PNG, JPEG, WebP, GIF, or AVIF · up to 90 MB each.{" "}
             {tagId || collectionId
               ? "New uploads are shareable by link and added to the selected tag or collection."
               : "New uploads are shareable by link."}
           </p>
           {uploadStatus && (
-            <p role="status" className="mt-3 text-sm text-neutral-600">
+            <p
+              role="status"
+              className="mt-3 hidden text-sm text-neutral-600 lg:block"
+            >
               {uploadStatus}
             </p>
           )}
           {uploadNotice && (
             <p
               role="status"
-              className="mt-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+              className="mt-3 hidden rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 lg:block"
             >
               {uploadNotice}
             </p>
@@ -602,7 +645,7 @@ function LibraryPage() {
           {error && (
             <div
               role="alert"
-              className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+              className="mt-4 hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 lg:block"
             >
               {error}
               <button
@@ -628,56 +671,74 @@ function LibraryPage() {
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
                   {captures.map((capture) => (
-                    <button
+                    <article
                       key={capture.id}
-                      type="button"
-                      onClick={() => setSelectedId(capture.id)}
-                      aria-pressed={selectedId === capture.id}
-                      className={`overflow-hidden rounded-2xl border bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${selectedId === capture.id ? "border-neutral-900 ring-1 ring-neutral-900" : "border-neutral-200"}`}
+                      className={`min-w-0 overflow-hidden rounded-2xl border bg-white shadow-sm ${selectedId === capture.id ? "border-neutral-900 ring-1 ring-neutral-900" : "border-neutral-200"}`}
                     >
-                      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-neutral-100">
-                        {capture.mediaType === "image" ? (
-                          <img
-                            src={`/api/image/${capture.id}`}
-                            alt=""
-                            loading="lazy"
-                            className="h-full w-full object-cover"
-                          />
-                        ) : capture.posterKey ? (
-                          <img
-                            src={`/api/poster/${capture.id}`}
-                            alt=""
-                            loading="lazy"
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-sm text-neutral-400">
-                            Recording
-                          </span>
-                        )}
-                      </div>
-                      <div className="p-4">
-                        <p className="truncate text-sm font-semibold">
-                          {capture.title || capture.filename}
-                        </p>
-                        <p className="mt-1 text-xs text-neutral-500">
-                          {displayDate(capture.createdAt)} ·{" "}
-                          {capture.mediaType === "video"
-                            ? "Recording"
-                            : "Image"}
-                        </p>
-                        {(capture.tags.length > 0 ||
-                          capture.collections.length > 0) && (
-                          <p className="mt-3 truncate text-xs text-neutral-600">
-                            {[...capture.collections, ...capture.tags]
-                              .map((item) => item.name)
-                              .join(" · ")}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedId(capture.id);
+                          if (compactLayout) setMobilePanel("details");
+                        }}
+                        aria-label={`Organize ${capture.title || capture.filename}`}
+                        aria-pressed={selectedId === capture.id}
+                        className="block w-full text-left outline-offset-[-3px] transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-neutral-900"
+                      >
+                        <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-neutral-100">
+                          {capture.mediaType === "image" ? (
+                            <img
+                              src={`/api/image/${capture.id}`}
+                              alt=""
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : capture.posterKey ? (
+                            <img
+                              src={`/api/poster/${capture.id}`}
+                              alt=""
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-sm text-neutral-400">
+                              Recording
+                            </span>
+                          )}
+                        </div>
+                        <div className="px-3 pb-2 pt-3 sm:p-4">
+                          <p className="truncate text-sm font-semibold">
+                            {capture.title || capture.filename}
                           </p>
-                        )}
-                      </div>
-                    </button>
+                          <p className="mt-1 text-xs text-neutral-500">
+                            {displayDate(capture.createdAt)} ·{" "}
+                            {capture.mediaType === "video"
+                              ? "Recording"
+                              : "Image"}
+                          </p>
+                          {(capture.tags.length > 0 ||
+                            capture.collections.length > 0) && (
+                            <p className="mt-3 truncate text-xs text-neutral-600">
+                              {[...capture.collections, ...capture.tags]
+                                .map((item) => item.name)
+                                .join(" · ")}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                      <a
+                        href={`/${capture.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Open share page for ${capture.title || capture.filename}`}
+                        className="flex min-h-11 items-center justify-between border-t border-neutral-100 px-3 text-xs font-medium text-neutral-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-neutral-900 xl:hidden"
+                      >
+                        Share page{" "}
+                        <ArrowSquareOut size={16} aria-hidden="true" />
+                      </a>
+                    </article>
                   ))}
                 </div>
               )}
@@ -700,7 +761,7 @@ function LibraryPage() {
             </div>
 
             {selected && (
-              <aside className="self-start rounded-2xl border border-neutral-200 bg-white p-5 xl:sticky xl:top-5">
+              <aside className="hidden self-start rounded-2xl border border-neutral-200 bg-white p-5 xl:sticky xl:top-5 xl:block">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
@@ -752,6 +813,245 @@ function LibraryPage() {
           </div>
         </section>
       </div>
+
+      <nav
+        aria-label="Library actions"
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-200 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_-16px_rgba(0,0,0,0.25)] lg:hidden"
+      >
+        {(uploadStatus || uploadNotice || error) && (
+          <div
+            className={`mx-auto mb-2 flex max-w-lg items-start gap-3 rounded-xl px-3 py-2 text-sm ${error ? "bg-red-50 text-red-800" : uploadNotice ? "bg-green-50 text-green-800" : "bg-neutral-100 text-neutral-700"}`}
+            role={error ? "alert" : "status"}
+          >
+            <p className="min-w-0 flex-1 break-words">
+              {error || uploadStatus || uploadNotice}
+            </p>
+            {(error || uploadNotice) && (
+              <button
+                type="button"
+                aria-label="Dismiss message"
+                onClick={() => {
+                  setError("");
+                  setUploadNotice("");
+                }}
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
+        <div className="mx-auto flex max-w-lg gap-2">
+          <button
+            type="button"
+            onClick={() => setMobilePanel("browse")}
+            className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-neutral-300 text-sm font-medium hover:bg-neutral-50"
+          >
+            <FolderSimple size={20} aria-hidden="true" className="shrink-0" />
+            <span className="min-w-0 truncate">
+              {collectionId
+                ? (metadata.collections.find((item) => item.id === collectionId)
+                    ?.name ?? "Organize")
+                : tagId
+                  ? (metadata.tags.find((item) => item.id === tagId)?.name ??
+                    "Organize")
+                  : "Organize"}
+            </span>
+          </button>
+          {selected && (
+            <button
+              type="button"
+              onClick={() => setMobilePanel("details")}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-neutral-300 px-3 text-sm font-medium hover:bg-neutral-50"
+            >
+              <Images size={20} aria-hidden="true" />
+              Details
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => fileInput.current?.click()}
+            className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-neutral-900 px-3 text-sm font-medium text-white disabled:opacity-50"
+          >
+            <UploadSimple size={20} aria-hidden="true" />
+            {uploadStatus ? "Uploading…" : "Upload"}
+          </button>
+        </div>
+      </nav>
+
+      <dialog
+        ref={browseDialog}
+        onClose={() =>
+          setMobilePanel((current) => (current === "browse" ? null : current))
+        }
+        className="m-0 h-dvh max-h-none w-screen max-w-none bg-white p-0 text-neutral-900 backdrop:bg-neutral-950/45 xl:hidden"
+        aria-labelledby="browse-panel-title"
+      >
+        <div className="flex h-full flex-col">
+          <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 px-5 py-4">
+            <h2 id="browse-panel-title" className="text-lg font-semibold">
+              Organize library
+            </h2>
+            <button
+              type="button"
+              onClick={() => setMobilePanel(null)}
+              aria-label="Close organize panel"
+              className="flex size-11 items-center justify-center rounded-lg hover:bg-neutral-100"
+            >
+              <X size={20} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="shrink-0 px-5 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setCollectionId("");
+                setTagId("");
+                setMobilePanel(null);
+              }}
+              className={`min-h-11 w-full rounded-lg px-3 text-left text-sm ${!collectionId && !tagId ? "bg-neutral-900 text-white" : "bg-neutral-100 hover:bg-neutral-200"}`}
+            >
+              All captures
+            </button>
+            <div
+              className="mt-4 flex gap-2 border-b border-neutral-200"
+              aria-label="Classification type"
+            >
+              {(["collections", "tags"] as const).map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={mobileKind === kind}
+                  onClick={() => setMobileKind(kind)}
+                  className={`min-h-11 flex-1 border-b-2 text-sm font-medium ${mobileKind === kind ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-600"}`}
+                >
+                  {kind === "collections" ? "Collections" : "Tags"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {error && (
+            <p
+              role="alert"
+              className="mx-5 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800"
+            >
+              {error}
+            </p>
+          )}
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5">
+            <ClassificationSection
+              title={mobileKind === "collections" ? "Collections" : "Tags"}
+              kind={mobileKind}
+              items={metadata[mobileKind]}
+              activeId={mobileKind === "collections" ? collectionId : tagId}
+              disabled={busy}
+              mobile
+              onSelect={(id) => {
+                setCollectionId(mobileKind === "collections" ? id : "");
+                setTagId(mobileKind === "tags" ? id : "");
+                setMobilePanel(null);
+              }}
+              onCreate={createItem}
+              onEdit={editItem}
+              onDelete={deleteItem}
+            />
+          </div>
+        </div>
+      </dialog>
+
+      <dialog
+        ref={detailsDialog}
+        onClose={() =>
+          setMobilePanel((current) => (current === "details" ? null : current))
+        }
+        className="m-0 h-dvh max-h-none w-screen max-w-none bg-white p-0 text-neutral-900 backdrop:bg-neutral-950/45 xl:hidden"
+        aria-labelledby="capture-panel-title"
+      >
+        {selected && (
+          <div className="flex h-full flex-col">
+            <div className="shrink-0 border-b border-neutral-200 px-5 pb-4 pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2
+                  id="capture-panel-title"
+                  className="min-w-0 truncate text-lg font-semibold"
+                >
+                  {selected.title || selected.filename}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setMobilePanel(null)}
+                  aria-label="Close capture details"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-neutral-100"
+                >
+                  <X size={20} aria-hidden="true" />
+                </button>
+              </div>
+              <a
+                href={`/${selected.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 px-4 text-sm font-medium text-white"
+              >
+                Open share page <ArrowSquareOut size={18} aria-hidden="true" />
+              </a>
+            </div>
+            <div className="shrink-0 border-b border-neutral-200 px-5 pt-2">
+              <div className="flex gap-2" aria-label="Capture organization">
+                {(["collections", "tags"] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    aria-pressed={assignmentKind === kind}
+                    onClick={() => setAssignmentKind(kind)}
+                    className={`min-h-11 flex-1 border-b-2 text-sm font-medium ${assignmentKind === kind ? "border-neutral-900" : "border-transparent text-neutral-600"}`}
+                  >
+                    {kind === "collections" ? "Collections" : "Tags"}
+                    {selected[kind].length > 0
+                      ? ` (${selected[kind].length})`
+                      : ""}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {error && (
+              <p
+                role="alert"
+                className="mx-5 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800"
+              >
+                {error}
+              </p>
+            )}
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+              <AssignmentSection
+                title={
+                  assignmentKind === "collections" ? "Collections" : "Tags"
+                }
+                kind={assignmentKind}
+                items={metadata[assignmentKind]}
+                assigned={selected[assignmentKind]}
+                disabled={busy}
+                mobile
+                onToggle={(item) =>
+                  void toggleAssignment(selected, assignmentKind, item)
+                }
+              />
+            </div>
+            <div className="shrink-0 border-t border-neutral-200 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileKind(assignmentKind);
+                  setMobilePanel("browse");
+                }}
+                className="min-h-11 w-full rounded-lg text-sm font-medium text-neutral-700 underline underline-offset-4"
+              >
+                Manage {assignmentKind}
+              </button>
+            </div>
+          </div>
+        )}
+      </dialog>
     </main>
   );
 }
@@ -766,6 +1066,7 @@ function ClassificationSection({
   onCreate,
   onEdit,
   onDelete,
+  mobile = false,
 }: {
   title: string;
   kind: Kind;
@@ -776,6 +1077,7 @@ function ClassificationSection({
   onCreate: (kind: Kind, name: string) => Promise<void>;
   onEdit: (kind: Kind, item: NamedItem) => Promise<void>;
   onDelete: (kind: Kind, item: NamedItem) => Promise<void>;
+  mobile?: boolean;
 }) {
   const [name, setName] = useState("");
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -789,11 +1091,11 @@ function ClassificationSection({
     }
   }
   return (
-    <section>
+    <section className={mobile ? "flex flex-col" : undefined}>
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500">
         {title}
       </h2>
-      <div className="space-y-1">
+      <div className={`space-y-1 ${mobile ? "order-2 mt-5" : ""}`}>
         {items.map((item) => (
           <div
             key={item.id}
@@ -802,7 +1104,7 @@ function ClassificationSection({
             <button
               type="button"
               onClick={() => onSelect(activeId === item.id ? "" : item.id)}
-              className="min-w-0 flex-1 truncate px-3 py-2 text-left text-sm"
+              className={`min-w-0 flex-1 truncate px-3 text-left text-sm ${mobile ? "min-h-12" : "py-2"}`}
             >
               {item.name}{" "}
               <span
@@ -818,7 +1120,7 @@ function ClassificationSection({
               disabled={disabled}
               onClick={() => void onEdit(kind, item)}
               aria-label={`Rename ${item.name}`}
-              className="px-1 text-xs opacity-70 hover:opacity-100"
+              className={`text-xs opacity-70 hover:opacity-100 ${mobile ? "flex size-11 items-center justify-center" : "px-1"}`}
             >
               ✎
             </button>
@@ -827,7 +1129,7 @@ function ClassificationSection({
               disabled={disabled}
               onClick={() => void onDelete(kind, item)}
               aria-label={`Delete ${item.name}`}
-              className="px-2 text-sm opacity-70 hover:opacity-100"
+              className={`text-sm opacity-70 hover:opacity-100 ${mobile ? "flex size-11 items-center justify-center" : "px-2"}`}
             >
               ×
             </button>
@@ -836,7 +1138,7 @@ function ClassificationSection({
       </div>
       <form
         onSubmit={(event) => void submit(event)}
-        className="mt-2 flex gap-1"
+        className={`mt-2 flex gap-2 ${mobile ? "order-1" : ""}`}
       >
         <input
           aria-label={`New ${kind === "tags" ? "tag" : "collection"} name`}
@@ -844,13 +1146,13 @@ function ClassificationSection({
           onChange={(event) => setName(event.target.value)}
           maxLength={kind === "tags" ? 40 : 80}
           placeholder={`New ${kind === "tags" ? "tag" : "collection"}`}
-          className="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-2 py-2 text-xs outline-none focus:border-neutral-900"
+          className={`min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 outline-none focus:border-neutral-900 ${mobile ? "min-h-12 text-sm" : "py-2 text-xs"}`}
         />
         <button
           type="submit"
           disabled={disabled || !name.trim()}
           aria-label={`Create ${kind === "tags" ? "tag" : "collection"}`}
-          className="rounded-lg border border-neutral-300 bg-white px-3 text-sm hover:bg-neutral-100 disabled:opacity-40"
+          className={`rounded-lg border border-neutral-300 bg-white text-sm hover:bg-neutral-100 disabled:opacity-40 ${mobile ? "size-12" : "px-3"}`}
         >
           +
         </button>
@@ -865,6 +1167,7 @@ function AssignmentSection({
   assigned,
   disabled,
   onToggle,
+  mobile = false,
 }: {
   title: string;
   kind: Kind;
@@ -872,22 +1175,29 @@ function AssignmentSection({
   assigned: Array<AssignedItem>;
   disabled: boolean;
   onToggle: (item: NamedItem) => void;
+  mobile?: boolean;
 }) {
   return (
-    <section className="mt-6 border-t border-neutral-200 pt-5">
+    <section
+      className={mobile ? "pt-5" : "mt-6 border-t border-neutral-200 pt-5"}
+    >
       <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
         {title}
       </h3>
       {items.length === 0 ? (
         <p className="mt-2 text-sm text-neutral-500">
-          Create one in the sidebar to get started.
+          {mobile
+            ? "Create one with Manage below to get started."
+            : "Create one in the sidebar to get started."}
         </p>
       ) : (
-        <div className="mt-3 max-h-48 space-y-1 overflow-y-auto">
+        <div
+          className={`mt-3 space-y-1 ${mobile ? "" : "max-h-48 overflow-y-auto"}`}
+        >
           {items.map((item) => (
             <label
               key={item.id}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-neutral-50"
+              className={`flex cursor-pointer items-center gap-3 rounded-lg px-2 text-sm hover:bg-neutral-50 ${mobile ? "min-h-12" : "py-1.5"}`}
             >
               <input
                 type="checkbox"
