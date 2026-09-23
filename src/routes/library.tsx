@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  LIBRARY_IMAGE_TYPES,
+  MAX_LIBRARY_UPLOAD_BYTES,
+} from "@/lib/library-upload-config";
 
 type NamedItem = { id: string; name: string; count: number };
 type AssignedItem = Pick<NamedItem, "id" | "name">;
@@ -18,6 +22,7 @@ type Capture = {
 type Metadata = { tags: Array<NamedItem>; collections: Array<NamedItem> };
 type CapturePage = { captures: Array<Capture>; nextCursor: string | null };
 type Kind = "tags" | "collections";
+const IMAGE_TYPES = new Set<string>(LIBRARY_IMAGE_TYPES);
 
 export const Route = createFileRoute("/library")({
   head: () => ({
@@ -86,7 +91,11 @@ function LibraryPage() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [uploadStatus, setUploadStatus] = useState("");
+  const [uploadNotice, setUploadNotice] = useState("");
+  const [refreshRevision, setRefreshRevision] = useState(0);
   const captureRequest = useRef(0);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -158,7 +167,7 @@ function LibraryPage() {
     setCaptures([]);
     setSelectedId(null);
     void loadCaptures();
-  }, [authenticated, loadCaptures]);
+  }, [authenticated, loadCaptures, refreshRevision]);
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -326,6 +335,76 @@ function LibraryPage() {
     }
   }
 
+  async function uploadImages(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0) return;
+    setError("");
+    setUploadNotice("");
+    if (files.length > 10) {
+      setError("Choose at most 10 images at a time.");
+      return;
+    }
+    const invalid = files.find(
+      (file) =>
+        !IMAGE_TYPES.has(file.type) ||
+        file.size === 0 ||
+        file.size > MAX_LIBRARY_UPLOAD_BYTES,
+    );
+    if (invalid) {
+      setError(
+        `“${invalid.name}” must be a PNG, JPEG, WebP, GIF, or AVIF image no larger than 90 MB.`,
+      );
+      return;
+    }
+
+    setBusy(true);
+    let uploaded = 0;
+    try {
+      for (const [index, file] of files.entries()) {
+        setUploadStatus(
+          `Uploading ${index + 1} of ${files.length}: ${file.name}`,
+        );
+        const headers: Record<string, string> = {
+          "content-type": file.type,
+          "x-filename": encodeURIComponent(file.name),
+          "x-upload-size": String(file.size),
+        };
+        if (tagId) headers["x-tag-id"] = tagId;
+        if (collectionId) headers["x-collection-id"] = collectionId;
+        await api("/api/library/upload", {
+          method: "PUT",
+          headers,
+          body: file,
+        });
+        uploaded += 1;
+      }
+      setUploadNotice(
+        `${uploaded} ${uploaded === 1 ? "image" : "images"} uploaded. Anyone with a share link can view them.`,
+      );
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : "Upload failed.";
+      setError(
+        uploaded
+          ? `${uploaded} image(s) uploaded before the next upload failed: ${reason}`
+          : reason,
+      );
+    } finally {
+      setUploadStatus("");
+      if (uploaded > 0) {
+        await refreshMetadata().catch(() =>
+          setError(
+            "Images uploaded, but the tags and collections could not be refreshed.",
+          ),
+        );
+        setQuery("");
+        setMediaType("all");
+        setRefreshRevision((value) => value + 1);
+      }
+      setBusy(false);
+    }
+  }
+
   const selected =
     captures.find((capture) => capture.id === selectedId) ?? null;
 
@@ -482,7 +561,44 @@ function LibraryPage() {
                 <option value="video">Recordings</option>
               </select>
             </label>
+            <input
+              ref={fileInput}
+              type="file"
+              accept={LIBRARY_IMAGE_TYPES.join(",")}
+              multiple
+              disabled={busy}
+              onChange={(event) => void uploadImages(event)}
+              className="sr-only"
+              aria-label="Choose images to upload"
+            />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileInput.current?.click()}
+              className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+            >
+              Upload images
+            </button>
           </div>
+          <p className="mt-2 text-xs text-neutral-500">
+            PNG, JPEG, WebP, GIF, or AVIF · up to 90 MB each.{" "}
+            {tagId || collectionId
+              ? "New uploads are shareable by link and added to the selected tag or collection."
+              : "New uploads are shareable by link."}
+          </p>
+          {uploadStatus && (
+            <p role="status" className="mt-3 text-sm text-neutral-600">
+              {uploadStatus}
+            </p>
+          )}
+          {uploadNotice && (
+            <p
+              role="status"
+              className="mt-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+            >
+              {uploadNotice}
+            </p>
+          )}
           {error && (
             <div
               role="alert"
@@ -507,7 +623,8 @@ function LibraryPage() {
                 <div className="rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-20 text-center">
                   <p className="text-lg font-medium">No captures found</p>
                   <p className="mt-2 text-sm text-neutral-500">
-                    Upload a capture from Screendrop or adjust your filters.
+                    Upload images here or from Screendrop, or adjust your
+                    filters.
                   </p>
                 </div>
               ) : (

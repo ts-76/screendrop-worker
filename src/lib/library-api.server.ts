@@ -9,6 +9,7 @@ import {
   validLibraryToken,
 } from "@/lib/library-session.server";
 import { ensureSchema } from "@/lib/uploads.server";
+import { handleLibraryUpload } from "@/lib/library-upload.server";
 
 const PAGE_SIZE = 24;
 const MAX_RELATIONS = 30;
@@ -337,6 +338,8 @@ export async function handleLibraryApi(
       return await listMetadata(env);
     if (path === "/api/library/captures" && request.method === "GET")
       return await listCaptures(request, env);
+    if (path === "/api/library/upload")
+      return await handleLibraryUpload(request, env);
 
     const relationMatch =
       /^\/api\/library\/captures\/([^/]+)\/(tags|collections)$/.exec(path);

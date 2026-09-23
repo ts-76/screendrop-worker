@@ -47,6 +47,13 @@ lets you create, rename, and delete tags and collections. Select a capture to
 assign multiple tags or collections. Deleting a tag or collection does **not**
 delete its captures.
 
+The **Upload images** button accepts up to 10 PNG, JPEG, WebP, GIF, or AVIF
+files at a time, with a 90 MB limit per file. Files stream to R2 through the
+authenticated Worker and appear in the library. If a tag or collection is
+selected when uploading, the new images are added to it. These uploads receive
+normal public share links; the library login protects organization, not the
+shared image itself.
+
 The library is private to anyone who knows the upload token. Sign-in exchanges
 the token for a signed, HttpOnly, SameSite=Strict cookie valid for 12 hours;
 the token is not stored in the browser. Sign out when using a shared computer.
